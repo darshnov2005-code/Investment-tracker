@@ -54,9 +54,9 @@ export default async function handler(req, res) {
     // snapshots of the latest available completed candles, so they remain
     // useful after market close.
     const scans = [
-      ["volume", "volume-surge"],
-      ["high", "stocks-at-52-week-high"],
-      ["low", "stocks-at-52-week-low"]
+      ["volume", "volume-surge-5"],
+      ["high", "copy-52-week-high-stocks-volume-breakout-check"],
+      ["low", "52-week-high-low-indicator-low"]
     ];
 
     const results = {};
