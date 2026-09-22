@@ -2,7 +2,7 @@
 :root{--b:#0a0e13;--p:#111821;--l:#263342;--t:#eef3f7;--m:#8e9aaa;--g:#8fd3b6;--r:#ef8d8d}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% -10%,#1c2d3b,#0a0e13 45%);color:var(--t);font:14px system-ui,sans-serif}.side{position:fixed;inset:0 auto 0 0;width:220px;background:#0b1016;border-right:1px solid var(--l);padding:22px 12px}.brand{display:flex;gap:10px;align-items:center;padding:0 8px 25px}.logo{width:34px;height:34px;border-radius:10px;background:var(--g);color:#07100c;display:grid;place-items:center;font-weight:900}.brand small{display:block;color:var(--m);font-size:10px}.nav button{display:block;width:100%;border:0;background:none;color:var(--m);padding:11px 12px;border-radius:8px;text-align:left;margin:2px 0;cursor:pointer}.nav button.active,.nav button:hover{background:#18222d;color:var(--t)}.main{margin-left:220px;padding:28px 32px;max-width:1450px}.top{display:flex;justify-content:space-between;align-items:end;margin-bottom:22px}.ey{font-size:10px;letter-spacing:.16em;color:var(--m)}h1{margin:5px 0 0;font-size:28px}.actions{display:flex;gap:8px}.btn,.input,.select,textarea{background:#141d27;color:var(--t);border:1px solid var(--l);border-radius:8px;padding:9px 12px}.btn{cursor:pointer}.primary{background:var(--g);color:#07100c;border-color:var(--g);font-weight:800}.danger{color:var(--r)}.grid{display:grid;gap:12px}.stats{grid-template-columns:repeat(4,1fr)}.two{grid-template-columns:1.35fr .9fr;margin-top:12px}.three{grid-template-columns:repeat(3,1fr)}.card{background:linear-gradient(145deg,#131c26,#0f161f);border:1px solid var(--l);border-radius:12px;padding:17px}.label{font-size:10px;text-transform:uppercase;color:var(--m);letter-spacing:.08em}.big{font-size:24px;font-weight:800;margin:7px 0}.muted,.sub{color:var(--m)}.muted{font-size:11px}.sub{font-size:10px;margin-top:2px}.green{color:var(--g)}.red{color:var(--r)}.head{display:flex;justify-content:space-between;align-items:center;margin:23px 0 10px}.head h2{font-size:16px;margin:0}.tablewrap{overflow:auto;border:1px solid var(--l);border-radius:10px}.table{width:100%;border-collapse:collapse;min-width:720px}.table th,.table td{padding:11px 13px;border-bottom:1px solid #202a35;text-align:left;font-size:12px}.table th{color:var(--m);font-size:9px;text-transform:uppercase;background:#101720}.asset{font-weight:700}.pill{background:#19232e;padding:4px 7px;border-radius:99px;font-size:9px}.allocation{height:12px;display:flex;overflow:hidden;border-radius:99px;background:#202a34}.allocation i{height:100%}.chart{height:210px;display:flex;align-items:end;gap:7px;padding:15px 0}.bar{flex:1;background:linear-gradient(#72b8dc,#3f6479);border-radius:5px 5px 0 0}.row{display:flex;justify-content:space-between}.search{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}.wide{width:100%}.progress{height:7px;background:#202a34;border-radius:99px;overflow:hidden;margin-top:9px}.progress i{display:block;height:100%;background:var(--g)}.empty{text-align:center;color:var(--m);padding:30px}.modalbg{position:fixed;inset:0;background:#000b;display:grid;place-items:center;padding:15px;z-index:10}.modal{width:min(700px,100%);max-height:90vh;overflow:auto;background:#111821;border:1px solid var(--l);border-radius:12px;padding:20px}.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field label{display:block;color:var(--m);font-size:10px;margin-bottom:5px}.full{grid-column:1/-1}.modalfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.hidden{display:none!important}.notice{padding:12px;background:#17222d;border:1px solid var(--l);border-radius:8px;color:#b7c2cd;font-size:11px}@media(max-width:900px){.side{width:62px}.brand div:last-child,.nav span{display:none}.main{margin-left:62px;padding:20px 15px}.stats,.three{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}}@media(max-width:600px){.stats,.three,.form{grid-template-columns:1fr}.top{flex-direction:column;align-items:flex-start;gap:10px}.actions{width:100%}.actions .btn{flex:1}.main{padding:16px 10px}}
 </style></head><body>
 <aside class="side"><div class="brand"><div class="logo">₹</div><div><b>InvestTrack</b><small>India portfolio</small></div></div><div class="nav">
-<button data-page="dashboard" class="active">⌂ <span>Dashboard</span></button><button data-page="holdings">▤ <span>Holdings</span></button><button data-page="transactions">⇄ <span>Transactions</span></button><button data-page="realized">◒ <span>Realised P/L</span></button><button data-page="goals">◎ <span>Goals</span></button><button data-page="import">⇧ <span>CSV Import</span></button><button data-page="settings">⚙ <span>Settings</span></button></div></aside>
+<button data-page="dashboard" class="active">⌂ <span>Dashboard</span></button><button data-page="holdings">▤ <span>Holdings</span></button><button data-page="transactions">⇄ <span>Transactions</span></button><button data-page="realized">◒ <span>Realised P/L</span></button><button data-page="research">⌕ <span>Stock Research</span></button><button data-page="goals">◎ <span>Goals</span></button><button data-page="import">⇧ <span>CSV Import</span></button><button data-page="settings">⚙ <span>Settings</span></button></div></aside>
 <main class="main"><div class="top"><div><div class="ey">PERSONAL WEALTH</div><h1 id="title">Dashboard</h1></div><div class="actions"><button class="btn" id="refresh">↻ Refresh quotes</button><button class="btn primary" id="add">＋ Add investment</button></div></div><div id="view"></div></main>
 <div id="mb" class="modalbg hidden"><div id="modal" class="modal"></div></div>
 <script>
@@ -26,7 +26,7 @@ function table(h){
   if(!h.length)return'<div class="card empty">No active holdings. Add your first investment.</div>';
   return'<div class="tablewrap"><table class="table"><thead><tr><th>Asset</th><th>Qty</th><th>Avg</th><th>Current</th><th>Value</th><th>Unrealised P/L</th><th>Actions</th></tr></thead><tbody>'+
   h.map(function(x){
-    return'<tr><td><div class="asset">'+E(x.name)+'</div><div class="sub">'+E(x.symbol)+" · "+E(x.exchange)+'</div></td><td>'+N(x.qty)+'</td><td>'+M(x.avg)+'</td><td>'+M(x.current)+'</td><td>'+M(x.value)+'</td><td class="'+(x.pnl>=0?"green":"red")+'">'+M(x.pnl)+'<div class="sub">'+P(x.cost?x.pnl/x.cost*100:0)+'</div></td><td><button class="btn" data-buy="'+E(x.symbol)+'">Buy</button> <button class="btn" data-sell="'+E(x.symbol)+'">Sell</button> <button class="btn" data-edit="'+E(x.symbol)+'">Edit</button></td></tr>'
+    return'<tr><td><div class="asset">'+E(x.name)+'</div><div class="sub">'+E(x.symbol)+" · "+E(x.exchange)+'</div></td><td>'+N(x.qty)+'</td><td>'+M(x.avg)+'</td><td>'+M(x.current)+'</td><td>'+M(x.value)+'</td><td class="'+(x.pnl>=0?"green":"red")+'">'+M(x.pnl)+'<div class="sub">'+P(x.cost?x.pnl/x.cost*100:0)+'</div></td><td><button class="btn" data-edit="'+E(x.symbol)+'">Edit</button></td></tr>'
   }).join("")+
   "</tbody></table></div>";
 }
@@ -50,10 +50,81 @@ function dash(){var t=T(),b=[.45,.5,.47,.58,.63,.68,.65,.76,.82,.93];return'<div
 function hold(){return'<div class="search"><input class="input" id="search" placeholder="Search holdings..."><select class="select" id="filter"><option value="">All types</option><option>STOCK</option><option>MUTUAL_FUND</option><option>ETF</option><option>FD</option><option>BOND</option><option>SGB</option><option>PPF</option><option>NPS</option><option>GOLD</option><option>CASH</option><option>OTHER</option></select></div><div id="hm">'+table(H())+"</div>"}
 function tx(){var a=s.transactions.slice().sort(function(x,y){return y.date.localeCompare(x.date)});return'<div class="head"><h2>Transaction ledger</h2><button class="btn primary" id="add2">＋ Add transaction</button></div><div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Action</th><th>Asset</th><th>Qty</th><th>Price/NAV</th><th>Charges</th><th>Notes</th><th></th></tr></thead><tbody>'+a.map(function(x){return'<tr><td>'+E(x.date)+'</td><td><span class="pill">'+E(x.action)+'</span></td><td><div class="asset">'+E(x.name)+'</div><div class="sub">'+E(x.symbol)+'</div></td><td>'+N(x.qty)+'</td><td>'+M(x.price)+'</td><td>'+M(x.charges)+'</td><td class="muted">'+E(x.notes)+'</td><td><button class="btn danger" data-del="'+E(x.id)+'">Delete</button></td></tr>'}).join("")+"</tbody></table></div>"}
 function realized(){var a=R(),v=a.reduce(function(x,y){return x+y.pnl},0);return'<div class="grid stats"><div class="card"><div class="label">Realised P/L</div><div class="big '+(v>=0?"green":"red")+'">'+M(v)+'</div></div><div class="card"><div class="label">Realised trades</div><div class="big">'+a.length+'</div></div><div class="card"><div class="label">Method</div><div class="big">FIFO</div></div></div><div class="head"><h2>Realised transactions</h2></div><div class="tablewrap"><table class="table"><thead><tr><th>Sale date</th><th>Asset</th><th>Qty</th><th>Cost basis</th><th>Proceeds</th><th>P/L</th></tr></thead><tbody>'+(a.length?a.map(function(x){return'<tr><td>'+E(x.date)+'</td><td>'+E(x.name)+'<div class="sub">'+E(x.symbol)+'</div></td><td>'+N(x.qty)+'</td><td>'+M(x.cost)+'</td><td>'+M(x.proceeds)+'</td><td class="'+(x.pnl>=0?"green":"red")+'">'+M(x.pnl)+'</td></tr>'}).join(""):'<tr><td colspan="6" class="empty">No realised transactions yet.</td></tr>')+"</tbody></table></div>"}
+var researchCache={};
+
+function fmtRatio(v){
+  if(v===null||v===undefined||v==="") return "—";
+  var n=Number(v);
+  return Number.isFinite(n)?n.toFixed(2):"—";
+}
+function fmtPct(v){
+  if(v===null||v===undefined||v==="") return "—";
+  var n=Number(v);
+  return Number.isFinite(n)?(Math.abs(n)<=1?n*100:n).toFixed(2)+"%":"—";
+}
+function fmtCr(v){
+  var n=Number(v);
+  if(!Number.isFinite(n))return "—";
+  return n>=10000000?"₹"+(n/10000000).toFixed(2)+" Cr":"₹"+(n/100000).toFixed(2)+" L";
+}
+
+function research(){
+  return '<div class="grid two"><div class="card"><div class="head" style="margin:0 0 12px"><h2>Stock Research</h2><span class="muted">Fundamental + market data</span></div><div class="search"><input class="input" id="researchSymbol" placeholder="Enter NSE symbol e.g. RELIANCE"><select class="select" id="researchExchange"><option>NSE</option><option>BSE</option></select><button class="btn primary" id="researchRun">Research</button></div><div class="notice">This section presents reported company and market metrics for analysis. It does not make a personalised buy/sell recommendation.</div></div><div class="card"><div class="label">How to use</div><div style="margin-top:8px">Enter a listed stock symbol and refresh the research. Metrics are grouped into valuation, profitability, growth, leverage, dividends and price trend.</div></div></div><div id="researchResult" style="margin-top:12px"><div class="card empty">Enter a stock symbol to start research.</div></div>';
+}
+
+function metric(label,value,sub){
+  return '<div class="card"><div class="label">'+E(label)+'</div><div class="big">'+E(value)+'</div>'+(sub?'<div class="muted">'+E(sub)+'</div>':'')+'</div>';
+}
+
+function researchHTML(d){
+  var p=d.price||{},f=d.financialData||{},s=d.summaryDetail||{},k=d.keyStats||{},t=d.trend||{};
+  var rows=[
+    ["Market Cap",fmtCr(p.marketCap),"Valuation"],
+    ["P/E",fmtRatio(s.trailingPE||k.trailingPE),"Trailing"],
+    ["Forward P/E",fmtRatio(s.forwardPE||k.forwardPE),"Forward"],
+    ["P/B",fmtRatio(k.priceToBook),"Price / book"],
+    ["EPS",p.epsTrailingTwelveMonths!=null?"₹"+fmtRatio(p.epsTrailingTwelveMonths):"—","TTM"],
+    ["ROE",fmtPct(f.returnOnEquity),"Return on equity"],
+    ["ROA",fmtPct(f.returnOnAssets),"Return on assets"],
+    ["Operating Margin",fmtPct(f.operatingMargins),"TTM"],
+    ["Profit Margin",fmtPct(f.profitMargins),"TTM"],
+    ["Gross Margin",fmtPct(f.grossMargins),"TTM"],
+    ["Revenue Growth",fmtPct(f.revenueGrowth),"YoY"],
+    ["Earnings Growth",fmtPct(f.earningsGrowth),"YoY"],
+    ["Debt / Equity",fmtRatio(f.debtToEquity),"Leverage"],
+    ["Current Ratio",fmtRatio(f.currentRatio),"Liquidity"],
+    ["Free Cash Flow",fmtCr(f.freeCashflow),"TTM"],
+    ["Dividend Yield",fmtPct(s.dividendYield),"Current"],
+    ["52W High",p.fiftyTwoWeekHigh!=null?M(p.fiftyTwoWeekHigh):"—","Price range"],
+    ["52W Low",p.fiftyTwoWeekLow!=null?M(p.fiftyTwoWeekLow):"—","Price range"],
+    ["50D Average",p.fiftyDayAverage!=null?M(p.fiftyDayAverage):"—","Trend"],
+    ["200D Average",p.twoHundredDayAverage!=null?M(p.twoHundredDayAverage):"—","Trend"]
+  ];
+  return '<div class="head"><h2>'+E(d.name||d.symbol)+' <span class="muted">'+E(d.symbol)+' · '+E(d.exchange)+'</span></h2><span class="muted">Data: '+E(d.source||"Market provider")+'</span></div>'+
+    '<div class="grid three">'+rows.map(function(x){return metric(x[0],x[1],x[2])}).join("")+'</div>'+
+    '<div class="grid two" style="margin-top:12px"><div class="card"><h2>Research checklist</h2><ul class="muted" style="line-height:1.9"><li>Compare P/E and P/B with the company’s sector and historical range.</li><li>Check whether ROE/ROA and operating margins are stable or improving.</li><li>Review revenue, earnings and free-cash-flow trends rather than relying on one year.</li><li>Assess debt/equity and liquidity for balance-sheet risk.</li><li>Use 50D/200D averages as trend context, not as a standalone decision rule.</li></ul></div><div class="card"><h2>Valuation context</h2><div class="notice">The tracker will show the numbers and context, but will not automatically tell you to buy or sell. If you want, we can later add your own rule-based framework (for example, thresholds you define) and label the result as “Meets my criteria / Does not meet my criteria.”</div></div></div>';
+}
+
+async function runResearch(){
+  var input=document.getElementById("researchSymbol"),ex=document.getElementById("researchExchange"),out=document.getElementById("researchResult");
+  var symbol=(input.value||"").trim().toUpperCase();
+  if(!symbol){out.innerHTML='<div class="card empty">Enter an NSE/BSE stock symbol.</div>';return;}
+  out.innerHTML='<div class="card empty">Loading company research…</div>';
+  try{
+    var r=await fetch("/api/research?symbol="+encodeURIComponent(symbol)+"&exchange="+encodeURIComponent(ex.value));
+    var d=await r.json();
+    if(!r.ok)throw new Error(d.error||"Research unavailable");
+    researchCache[symbol]=d;
+    out.innerHTML=researchHTML(d);
+  }catch(err){
+    out.innerHTML='<div class="card empty">Could not load research for '+E(symbol)+'. '+E(err.message||"Provider error")+'</div>';
+  }
+}
+
 function goals(){var v=T().v;return'<div class="head"><h2>Financial goals</h2><button class="btn primary" id="goal">Add goal</button></div><div class="grid three">'+(s.goals.length?s.goals.map(function(g){var p=Math.min(100,g.target?v/g.target*100:0);return'<div class="card"><div class="row"><b>'+E(g.name)+'</b><span class="muted">'+E(g.date)+'</span></div><div class="big">'+M(v)+'</div><div class="muted">of '+M(g.target)+'</div><div class="progress"><i style="width:'+p+'%"></i></div><div class="row muted" style="margin-top:7px"><span>'+p.toFixed(1)+'%</span><span>'+M(Math.max(0,g.target-v))+' remaining</span></div></div>'}).join(""):'<div class="card empty">Create a target such as a ₹10 lakh portfolio.</div>')+"</div>"}
 function imp(){return'<div class="card"><h2>CSV import</h2><p class="muted">Columns: date,type,name,symbol,exchange,action,qty,price,charges,notes</p><textarea id="csv" class="wide" rows="10"></textarea><div class="modalfoot"><button class="btn primary" id="import">Import</button></div></div>'}
 function settings(){return'<div class="grid two"><div class="card"><h2>Market data</h2><p class="muted">Stocks/ETFs use NSE/BSE providers. Mutual funds use AMFI NAV data.</p></div><div class="card"><h2>Data controls</h2><p class="muted">Portfolio data is stored in this browser.</p><button class="btn" id="export">Export JSON</button> <button class="btn danger" id="reset">Reset demo</button></div></div>'}
-function render(){var map={dashboard:dash,holdings:hold,transactions:tx,realized:realized,goals:goals,import:imp,settings:settings},titles={dashboard:"Dashboard",holdings:"Holdings",transactions:"Transactions",realized:"Realised P/L",goals:"Goals",import:"CSV Import",settings:"Settings"};document.getElementById("title").textContent=titles[page];document.querySelectorAll(".nav button").forEach(function(b){b.classList.toggle("active",b.dataset.page===page)});document.getElementById("view").innerHTML=map[page]()}
+function render(){var map={dashboard:dash,holdings:hold,transactions:tx,realized:realized,research:research,goals:goals,import:imp,settings:settings},titles={dashboard:"Dashboard",holdings:"Holdings",transactions:"Transactions",realized:"Realised P/L",research:"Stock Research",goals:"Goals",import:"CSV Import",settings:"Settings"};document.getElementById("title").textContent=titles[page];document.querySelectorAll(".nav button").forEach(function(b){b.classList.toggle("active",b.dataset.page===page)});document.getElementById("view").innerHTML=map[page]()}
 function close(){document.getElementById("mb").classList.add("hidden")}
 var mfCache = null;
 
@@ -162,7 +233,7 @@ function openTx(symbol,unused,forcedAction){
 }
 
 function openGoal(){document.getElementById("modal").innerHTML='<h2>Add financial goal</h2><form id="gf"><div class="form"><div class="field full"><label>Goal name</label><input class="input wide" name="name" required placeholder="₹10 lakh portfolio"></div><div class="field"><label>Target amount</label><input class="input wide" type="number" name="target" required></div><div class="field"><label>Target date</label><input class="input wide" type="date" name="date"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Create</button></div></form>';document.getElementById("mb").classList.remove("hidden");document.getElementById("close").onclick=close;document.getElementById("gf").onsubmit=function(e){e.preventDefault();var o=Object.fromEntries(new FormData(e.target));o.id=String(Date.now());o.target=Number(o.target);s.goals.push(o);save();close();render()}}
-document.addEventListener("click",function(e){var p=e.target.closest("[data-page]");if(p){page=p.dataset.page;render();return}if(e.target.id==="add"||e.target.id==="add2")openTx();if(e.target.dataset.edit)openTx(e.target.dataset.edit);if(e.target.dataset.buy)openBuy(e.target.dataset.buy);if(e.target.dataset.sell)openSell(e.target.dataset.sell);if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(function(x){return x.id!==e.target.dataset.del});save();render()}if(e.target.id==="goal")openGoal();if(e.target.id==="import"){var lines=document.getElementById("csv").value.trim().split(/\r?\n/).filter(Boolean);lines.forEach(function(x){var c=x.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+Math.random()),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported")}if(e.target.id==="export"){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup.json";a.click()}if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={transactions:demo,goals:[]};save();render()}});
+document.addEventListener("click",function(e){var p=e.target.closest("[data-page]");if(p){page=p.dataset.page;render();return}if(e.target.id==="add"||e.target.id==="add2")openTx();if(e.target.dataset.edit)openTx(e.target.dataset.edit);if(e.target.dataset.buy)openBuy(e.target.dataset.buy);if(e.target.dataset.sell)openSell(e.target.dataset.sell);if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(function(x){return x.id!==e.target.dataset.del});save();render()}if(e.target.id==="goal")openGoal();if(e.target.id==="researchRun")runResearch();if(e.target.id==="import"){var lines=document.getElementById("csv").value.trim().split(/\r?\n/).filter(Boolean);lines.forEach(function(x){var c=x.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+Math.random()),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported")}if(e.target.id==="export"){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup.json";a.click()}if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={transactions:demo,goals:[]};save();render()}});
 document.addEventListener("input",function(e){if(e.target.id==="search"||e.target.id==="filter"){var qv=(document.getElementById("search").value||"").toLowerCase(),fv=document.getElementById("filter").value;document.getElementById("hm").innerHTML=table(H().filter(function(x){return(!fv||x.type===fv)&&(!qv||x.name.toLowerCase().indexOf(qv)>=0||x.symbol.toLowerCase().indexOf(qv)>=0)}))}});
 document.getElementById("refresh").onclick=async function(){var hs=H(),ok=0;for(var i=0;i<hs.length;i++){try{await fetchQuote(hs[i].symbol,hs[i].exchange);ok++}catch(e){}}render();alert(ok+" quote(s) refreshed.")};
 document.getElementById("mb").onclick=function(e){if(e.target===document.getElementById("mb"))close()};render();
