@@ -142,50 +142,44 @@ async function runResearch(){
 
 var technicalCache={};
 
+var marketScannerCache=null;
+
 function scanner(){
-  return '<div class="grid two"><div class="card"><div class="head" style="margin:0 0 12px"><h2>Technical Scanner</h2><span class="muted">Price + volume signals</span></div><div class="search"><input class="input" id="scannerSymbol" placeholder="Enter NSE symbol e.g. RELIANCE"><select class="select" id="scannerExchange"><option>NSE</option><option>BSE</option></select><button class="btn primary" id="scannerRun">Scan stock</button><button class="btn" id="scannerPortfolio">Scan holdings</button></div><div class="notice">Scans 1 year of daily price/volume history and highlights volume expansion, 52-week proximity, moving-average position and RSI conditions.</div></div><div class="card"><div class="label">Scanner rules</div><div class="muted" style="line-height:1.8;margin-top:8px">Volume surge ≥ 2× 20-day average · High volume ≥ 1.5× · Near 52W high/low ≤ 3% · RSI ≥ 70 overbought · RSI ≤ 30 oversold.</div></div></div><div id="scannerResult" style="margin-top:12px"><div class="card empty">Scan a stock or your current holdings.</div></div>';
+  return '<div class="card"><div class="head" style="margin:0 0 12px"><h2>Market-Wide Technical Scanner</h2><span class="muted">NSE market stocks · live scanner lists</span></div><div class="search"><button class="btn primary" id="marketScan">Refresh Market Scanner</button><select class="select" id="marketLimit"><option value="25">Top 25</option><option value="50" selected>Top 50</option><option value="100">Top 100</option></select></div><div class="notice">This scanner is market-wide — you do not need to search for a stock. It pulls NSE scanner lists and shows stocks appearing in volume-gainer, 52-week-high and 52-week-low screens.</div></div><div id="marketResult" style="margin-top:12px"><div class="card empty">Click “Refresh Market Scanner” to load the current market-wide stocks.</div></div>';
 }
 
-function scanCard(d){
-  var flags=d.flags||[];
-  function tag(x){var red=/low|oversold|below/i.test(x),green=/high|surge|above|oversold/i.test(x);return '<span class="pill '+(red&&!green?'red':green?'green':'')+'" style="display:inline-block;margin:3px">'+E(x)+'</span>'}
-  return '<div class="head"><h2>'+E(d.name||d.symbol)+' <span class="muted">'+E(d.symbol)+' · '+E(d.exchange)+'</span></h2><span class="muted">Updated '+new Date(d.fetchedAt).toLocaleTimeString('en-IN')+'</span></div><div class="grid three">'+
-    metric("Price",M(d.price),"Current")+
-    metric("Volume",N(d.volume),"Today")+
-    metric("Volume vs 20D",d.volumeRatio?d.volumeRatio.toFixed(2)+"×":"—","Current / average")+
-    metric("52W High",M(d.high52),d.nearHighPct.toFixed(2)+"% away")+
-    metric("52W Low",M(d.low52),d.nearLowPct.toFixed(2)+"% above")+
-    metric("RSI (14)",d.rsi14.toFixed(2),d.rsi14>=70?"Overbought":d.rsi14<=30?"Oversold":"Neutral")+
-    metric("20DMA",M(d.sma20),"Trend")+
-    metric("50DMA",M(d.sma50),"Trend")+
-    metric("200DMA",d.sma200?M(d.sma200):"—","Trend")+
-    '</div><div class="card" style="margin-top:12px"><div class="label">Scanner flags</div><div style="margin-top:8px">'+(flags.length?flags.map(tag).join(""):'<span class="muted">No configured scanner condition triggered.</span>')+'</div></div>';
+function marketTable(rows,kind,limit){
+  rows=(rows||[]).slice(0,limit);
+  if(!rows.length)return'<div class="card empty">No stocks returned by this scanner right now.</div>';
+  var title=kind==="volume"?"Volume Surge / Volume Gainers":kind==="high"?"Near 52-Week High":"Near 52-Week Low";
+  return'<div class="card"><div class="head" style="margin:0 0 10px"><h2>'+title+'</h2><span class="muted">'+rows.length+' stocks</span></div><div class="tablewrap"><table class="table"><thead><tr><th>Stock</th><th>LTP</th><th>Change</th><th>Volume</th><th>52W High</th><th>52W Low</th><th>Signal</th></tr></thead><tbody>'+
+    rows.map(function(x){
+      var nearH=x.high52&&x.price?((x.high52-x.price)/x.high52*100):null;
+      var nearL=x.low52&&x.price?((x.price-x.low52)/x.low52*100):null;
+      var sig=kind==="volume"?"Volume activity":kind==="high"?(nearH!=null?nearH.toFixed(2)+"% below high":"Near high"):(nearL!=null?nearL.toFixed(2)+"% above low":"Near low");
+      return'<tr><td><div class="asset">'+E(x.name||x.symbol)+'</div><div class="sub">'+E(x.symbol)+'</div></td><td>'+M(x.price)+'</td><td class="'+(x.change>=0?"green":"red")+'">'+(Number.isFinite(x.change)?P(x.change):"—")+'</td><td>'+N(x.volume)+'</td><td>'+M(x.high52)+'</td><td>'+M(x.low52)+'</td><td><span class="pill">'+E(sig)+'</span></td></tr>';
+    }).join("")+'</tbody></table></div></div>';
 }
 
-async function scanOne(symbol,exchange){
-  var r=await fetch("/api/technical?symbol="+encodeURIComponent(symbol)+"&exchange="+encodeURIComponent(exchange));
-  var d=await r.json();
-  if(!r.ok)throw new Error(d.error||"Scanner unavailable");
-  technicalCache[symbol]=d;return d;
+async function loadMarketScanner(){
+  var out=document.getElementById("marketResult");
+  out.innerHTML='<div class="card empty">Loading market-wide NSE scanner…</div>';
+  try{
+    var r=await fetch("/api/market-scanner");
+    var d=await r.json();
+    if(!r.ok)throw new Error(d.error||"Market scanner unavailable");
+    marketScannerCache=d;
+    var limit=Number(document.getElementById("marketLimit").value)||50;
+    out.innerHTML='<div class="head"><h2>Market Scanner Results</h2><span class="muted">Updated '+new Date(d.fetchedAt).toLocaleTimeString("en-IN")+'</span></div><div class="grid three">'+
+      metric("Volume Surge",String((d.volumeSurge||[]).length),"NSE volume-gainer list")+
+      metric("52W High",String((d.near52High||[]).length),"NSE 52-week-high list")+
+      metric("52W Low",String((d.near52Low||[]).length),"NSE 52-week-low list")+
+      '</div><div style="margin-top:12px">'+marketTable(d.volumeSurge,"volume",limit)+'</div><div style="margin-top:12px">'+marketTable(d.near52High,"high",limit)+'</div><div style="margin-top:12px">'+marketTable(d.near52Low,"low",limit)+'</div>';
+  }catch(e){
+    out.innerHTML='<div class="card empty">Could not load market scanner. '+E(e.message||"NSE provider error")+'</div>';
+  }
 }
 
-async function runScanner(){
-  var symbol=(document.getElementById("scannerSymbol").value||"").trim().toUpperCase();
-  var ex=document.getElementById("scannerExchange").value,out=document.getElementById("scannerResult");
-  if(!symbol){out.innerHTML='<div class="card empty">Enter an NSE/BSE symbol.</div>';return;}
-  out.innerHTML='<div class="card empty">Scanning '+E(symbol)+'…</div>';
-  try{out.innerHTML=scanCard(await scanOne(symbol,ex));}catch(e){out.innerHTML='<div class="card empty">Could not scan '+E(symbol)+'. '+E(e.message||"Provider error")+'</div>'}
-}
-
-async function scanPortfolio(){
-  var hs=H().filter(function(x){return x.exchange==="NSE"||x.exchange==="BSE"});
-  var out=document.getElementById("scannerResult");
-  if(!hs.length){out.innerHTML='<div class="card empty">No NSE/BSE holdings available to scan.</div>';return;}
-  out.innerHTML='<div class="card empty">Scanning '+hs.length+' holding(s)…</div>';
-  var results=[];
-  for(var i=0;i<hs.length;i++){try{results.push(await scanOne(hs[i].symbol,hs[i].exchange))}catch(e){results.push({symbol:hs[i].symbol,exchange:hs[i].exchange,name:hs[i].name,error:e.message})}}
-  out.innerHTML='<div class="head"><h2>Portfolio technical scan</h2><span class="muted">'+results.length+' stocks</span></div>'+results.map(function(d){if(d.error)return'<div class="card empty">'+E(d.symbol)+': '+E(d.error)+'</div>';return scanCard(d)}).join("");
-}
 
 function goals(){var v=T().v;return'<div class="head"><h2>Financial goals</h2><button class="btn primary" id="goal">Add goal</button></div><div class="grid three">'+(s.goals.length?s.goals.map(function(g){var p=Math.min(100,g.target?v/g.target*100:0);return'<div class="card"><div class="row"><b>'+E(g.name)+'</b><span class="muted">'+E(g.date)+'</span></div><div class="big">'+M(v)+'</div><div class="muted">of '+M(g.target)+'</div><div class="progress"><i style="width:'+p+'%"></i></div><div class="row muted" style="margin-top:7px"><span>'+p.toFixed(1)+'%</span><span>'+M(Math.max(0,g.target-v))+' remaining</span></div></div>'}).join(""):'<div class="card empty">Create a target such as a ₹10 lakh portfolio.</div>')+"</div>"}
 function imp(){return'<div class="card"><h2>CSV import</h2><p class="muted">Columns: date,type,name,symbol,exchange,action,qty,price,charges,notes</p><textarea id="csv" class="wide" rows="10"></textarea><div class="modalfoot"><button class="btn primary" id="import">Import</button></div></div>'}
@@ -299,7 +293,7 @@ function openTx(symbol,unused,forcedAction){
 }
 
 function openGoal(){document.getElementById("modal").innerHTML='<h2>Add financial goal</h2><form id="gf"><div class="form"><div class="field full"><label>Goal name</label><input class="input wide" name="name" required placeholder="₹10 lakh portfolio"></div><div class="field"><label>Target amount</label><input class="input wide" type="number" name="target" required></div><div class="field"><label>Target date</label><input class="input wide" type="date" name="date"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Create</button></div></form>';document.getElementById("mb").classList.remove("hidden");document.getElementById("close").onclick=close;document.getElementById("gf").onsubmit=function(e){e.preventDefault();var o=Object.fromEntries(new FormData(e.target));o.id=String(Date.now());o.target=Number(o.target);s.goals.push(o);save();close();render()}}
-document.addEventListener("click",function(e){var p=e.target.closest("[data-page]");if(p){page=p.dataset.page;render();return}if(e.target.id==="add"||e.target.id==="add2")openTx();if(e.target.dataset.edit)openTx(e.target.dataset.edit);if(e.target.dataset.buy)openBuy(e.target.dataset.buy);if(e.target.dataset.sell)openSell(e.target.dataset.sell);if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(function(x){return x.id!==e.target.dataset.del});save();render()}if(e.target.id==="goal")openGoal();if(e.target.id==="researchRun")runResearch();if(e.target.id==="scannerRun")runScanner();if(e.target.id==="scannerPortfolio")scanPortfolio();if(e.target.id==="import"){var lines=document.getElementById("csv").value.trim().split(/\r?\n/).filter(Boolean);lines.forEach(function(x){var c=x.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+Math.random()),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported")}if(e.target.id==="export"){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup.json";a.click()}if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={transactions:demo,goals:[]};save();render()}});
+document.addEventListener("click",function(e){var p=e.target.closest("[data-page]");if(p){page=p.dataset.page;render();return}if(e.target.id==="add"||e.target.id==="add2")openTx();if(e.target.dataset.edit)openTx(e.target.dataset.edit);if(e.target.dataset.buy)openBuy(e.target.dataset.buy);if(e.target.dataset.sell)openSell(e.target.dataset.sell);if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(function(x){return x.id!==e.target.dataset.del});save();render()}if(e.target.id==="goal")openGoal();if(e.target.id==="researchRun")runResearch();if(e.target.id==="marketScan")loadMarketScanner();if(e.target.id==="import"){var lines=document.getElementById("csv").value.trim().split(/\r?\n/).filter(Boolean);lines.forEach(function(x){var c=x.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+Math.random()),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported")}if(e.target.id==="export"){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup.json";a.click()}if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={transactions:demo,goals:[]};save();render()}});
 document.addEventListener("input",function(e){if(e.target.id==="search"||e.target.id==="filter"){var qv=(document.getElementById("search").value||"").toLowerCase(),fv=document.getElementById("filter").value;document.getElementById("hm").innerHTML=table(H().filter(function(x){return(!fv||x.type===fv)&&(!qv||x.name.toLowerCase().indexOf(qv)>=0||x.symbol.toLowerCase().indexOf(qv)>=0)}))}});
 document.getElementById("refresh").onclick=async function(){var hs=H(),ok=0;for(var i=0;i<hs.length;i++){try{await fetchQuote(hs[i].symbol,hs[i].exchange);ok++}catch(e){}}render();alert(ok+" quote(s) refreshed.")};
 document.getElementById("mb").onclick=function(e){if(e.target===document.getElementById("mb"))close()};render();
