@@ -66,7 +66,8 @@ export default async function handler(req, res) {
       const text = await r.text();
       const row = text.split(/\r?\n/).find(x => { const c=x.split(";").map(v=>v.trim()); return c[0]===symbol || c[1]===symbol || c[2]===symbol; });
       if (!row) return res.status(404).json({ error: "AMFI scheme code not found", symbol });
-      const cols = row.split(";").map(v => v.trim());\n      const p = Number(cols[4]);
+      const cols = row.split(";").map(v => v.trim());
+      const p = Number(cols[4]);
       if (!Number.isFinite(p)) throw new Error("Invalid AMFI NAV");
       return res.status(200).json({ symbol, exchange: "AMFI", price: p, currency: "INR", source: "AMFI" });
     }
