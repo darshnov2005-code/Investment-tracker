@@ -65,7 +65,7 @@ function downloadBackup(){
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)
 }
 
-async function hashPin(pin){
+async async function hashPin(pin){
   if(!crypto?.subtle)return btoa(pin);
   const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(pin));
   return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("")
@@ -74,7 +74,7 @@ async function lock(){
   if(!s.settings.privacy.pinHash){alert("Set a PIN first in Settings / Data.");return}
   locked=true;$("lockscreen").classList.remove("hidden");$("unlockPin").value="";$("unlockMsg").textContent=""
 }
-async function unlock(){
+async async function unlock(){
   const ok=(await hashPin($("unlockPin").value))===s.settings.privacy.pinHash;
   if(ok){locked=false;$("lockscreen").classList.add("hidden");lastActivity=Date.now()}else $("unlockMsg").textContent="Incorrect PIN."
 }
@@ -82,7 +82,7 @@ document.addEventListener("mousemove",()=>lastActivity=Date.now());
 document.addEventListener("keydown",()=>lastActivity=Date.now());
 setInterval(()=>{const m=Number(s.settings.privacy.autoLockMinutes)||0;if(m&&s.settings.privacy.pinHash&&!locked&&Date.now()-lastActivity>m*60000)lock()},30000);
 
-async function fetchQuote(symbol,exchange,force=false){
+async async function fetchQuote(symbol,exchange,force=false){
   const ttl=Number(s.settings.market.refreshTtl)||60000;
   if(!force&&q[symbol]&&q[symbol+"_at"]&&Date.now()-q[symbol+"_at"]<ttl)return {price:q[symbol],source:q[symbol+"_source"]};
   const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),8000);
@@ -190,14 +190,14 @@ function researchHTML(d){
   const rows=[["Market Cap",p.marketCap?money(p.marketCap):"—","Provider"],["P/E",fmt(sd.trailingPE||k.trailingPE),"Trailing"],["Forward P/E",fmt(sd.forwardPE||k.forwardPE),"Forward"],["P/B",fmt(k.priceToBook),"Price/book"],["EPS",p.epsTrailingTwelveMonths!=null?money(p.epsTrailingTwelveMonths):"—","TTM"],["ROE",fmt(f.returnOnEquity,"pct"),"Return on equity"],["ROA",fmt(f.returnOnAssets,"pct"),"Return on assets"],["Operating Margin",fmt(f.operatingMargins,"pct"),"TTM"],["Profit Margin",fmt(f.profitMargins,"pct"),"TTM"],["Revenue Growth",fmt(f.revenueGrowth,"pct"),"YoY"],["Earnings Growth",fmt(f.earningsGrowth,"pct"),"YoY"],["Debt / Equity",fmt(f.debtToEquity),"Leverage"],["Current Ratio",fmt(f.currentRatio),"Liquidity"],["Free Cash Flow",f.freeCashflow!=null?money(f.freeCashflow):"—","TTM"],["Dividend Yield",fmt(sd.dividendYield,"pct"),"Current"],["52W High",p.fiftyTwoWeekHigh!=null?money(p.fiftyTwoWeekHigh):"—","Price range"],["52W Low",p.fiftyTwoWeekLow!=null?money(p.fiftyTwoWeekLow):"—","Price range"],["50D Average",p.fiftyDayAverage!=null?money(p.fiftyDayAverage):"—","Trend"],["200D Average",p.twoHundredDayAverage!=null?money(p.twoHundredDayAverage):"—","Trend"]];
   return'<div class="head"><h2>'+esc(d.name||d.symbol)+' <span class="muted">'+esc(d.symbol)+' · '+esc(d.exchange)+'</span></h2><span class="muted">Fetched '+new Date(d.fetchedAt||Date.now()).toLocaleString("en-IN")+' · '+esc(d.source||"Provider")+'</span></div><div class="card" style="margin-bottom:12px"><div class="label">Transparent screening signal</div><div class="big '+(sg.signal==="BUY"?"green":sg.signal==="SELL"?"red":"amber")+'">'+sg.signal+'</div><div class="muted">Score '+sg.score+' · thresholds are visible and rule-based.</div><div style="margin-top:8px">'+sg.reasons.map(x=>'<span class="pill" style="margin:3px">'+esc(x)+'</span>').join("")+'</div><div class="modalfoot"><button class="btn" data-news-symbol="'+esc(d.symbol)+'">View News & Events</button></div></div><div class="grid three">'+rows.map(x=>metric(x[0],x[1],x[2])).join("")+'</div><div class="card" style="margin-top:12px"><h2>Company profile</h2><p class="muted">'+esc((d.profile||{}).longBusinessSummary||"Business description unavailable from provider.")+'</p></div><div class="grid two" style="margin-top:12px"><div class="card"><h2>How the signal works</h2><p class="muted">Positive points are assigned for stronger profitability, growth, liquidity, cash flow, manageable leverage, reasonable P/E and price above both moving averages. Negative points apply to weak readings.</p></div><div class="card"><h2>Data source</h2><p class="muted">Research data is fetched server-side from Yahoo Finance. If the provider cannot return a metric, it is shown as unavailable rather than estimated.</p></div></div>'
 }
-async function runResearch(){
+async async function runResearch(){
   const symbol=($("researchSymbol")?.value||"").trim().toUpperCase(),ex=$("researchExchange")?.value||"NSE",out=$("researchResult");if(!symbol)return out.innerHTML='<div class="card empty">Enter an NSE/BSE stock symbol.</div>';
   out.innerHTML='<div class="card empty">Loading research…</div>';
   try{const r=await fetch("/api/research?symbol="+encodeURIComponent(symbol)+"&exchange="+encodeURIComponent(ex));const d=await r.json();if(!r.ok)throw new Error(d.error||"Research unavailable");out.innerHTML=researchHTML(d)}catch(e){out.innerHTML='<div class="card empty">Could not load research: '+esc(e.message||"Provider error")+'</div>'}
 }
 
 function newsPage(){return'<div class="grid two"><div class="card"><h2>News & Events</h2><p class="muted">Recent company news from the external market-data provider. This section is informational.</p><div class="search"><input class="input" id="newsSymbol" placeholder="NSE symbol e.g. RELIANCE"><button class="btn primary" id="newsRun">Load news</button></div></div><div class="card"><div class="label">Portfolio shortcut</div><p class="muted">You can open news from a stock in Stock Research.</p></div></div><div id="newsResult" style="margin-top:12px"><div class="card empty">Enter a symbol to load news.</div></div>'}
-async function runNews(symbol){
+async async function runNews(symbol){
   symbol=(symbol||$("newsSymbol")?.value||"").trim().toUpperCase();const out=$("newsResult");if(!symbol)return out.innerHTML='<div class="card empty">Enter a symbol.</div>';
   out.innerHTML='<div class="card empty">Loading news…</div>';
   try{const r=await fetch("/api/news?symbol="+encodeURIComponent(symbol));const d=await r.json();if(!r.ok)throw new Error(d.error||"News unavailable");const items=d.items||[];out.innerHTML='<div class="card"><div class="head" style="margin:0 0 8px"><h2>'+esc(d.name||symbol)+'</h2><span class="muted">Source: '+esc(d.source||"Yahoo Finance")+'</span></div>'+(items.length?items.map(n=>'<div class="newsitem"><a href="'+esc(n.link||"#")+'" target="_blank" rel="noopener">'+esc(n.title||"Untitled")+'</a><div class="newsmeta">'+esc(n.publisher||"Provider")+' · '+esc(n.published||"")+'</div></div>').join(""):'<div class="empty">No recent news found.</div>')+'</div>'}catch(e){out.innerHTML='<div class="card empty">Could not load news: '+esc(e.message||"Provider error")+'</div>'}
@@ -212,17 +212,17 @@ function importPage(){return'<div class="card"><h2>CSV import</h2><p class="mute
 
 function settingsPage(){
   const p=!!s.settings.privacy.pinHash,b=s.settings.backup;
-  return'<div class="grid two"><div class="card"><h2>Privacy & local lock</h2><p class="muted">The PIN locks the app UI in this browser. It is not encryption and does not protect data from developer-tools access.</p><div class="form"><div class="field"><label>New PIN</label><input class="input wide" id="pin1" type="password" maxlength="8" inputmode="numeric" placeholder="4–8 digits"></div><div class="field"><label>Confirm PIN</label><input class="input wide" id="pin2" type="password" maxlength="8" inputmode="numeric"></div></div><div class="modalfoot"><button class="btn" id="setpin">'+(p?"Change PIN":"Set PIN")+'</button><button class="btn" id="lockNow">Lock now</button></div><div class="muted">Auto-lock <select class="select" id="autolock"><option value="0">Never</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></div></div><div class="card"><h2>Automatic backup / restore</h2><p class="muted">Automatic snapshots are stored locally in IndexedDB. The app also keeps the primary portfolio in localStorage.</p><div class="sourcebar"><span class="status"><i class="dot"></i> Auto backup: On</span><span class="status">Last snapshot: '+(b.lastBackupAt?new Date(b.lastBackupAt).toLocaleString("en-IN"):"Not yet")+'</span></div><div class="modalfoot"><button class="btn" id="backupNow">Backup now</button><button class="btn" id="restoreBackup">Restore latest</button><button class="btn" id="export">Export JSON</button><label class="btn">Import JSON<input id="importJson" type="file" accept=".json" hidden></label></div></div></div><div class="grid two" style="margin-top:12px"><div class="card"><h2>Market data & reliability</h2><p class="muted">Stocks/ETFs use Yahoo Finance with NSE fallback where available. Mutual funds use AMFI. Research and news use Yahoo Finance. Failed refreshes do not overwrite the last known good quote.</p><label class="muted">Quote cache TTL (seconds)<input class="input" id="ttl" type="number" min="10" value="'+(Number(s.settings.market.refreshTtl)/1000)+'"></label>'+sources()+'</div><div class="card"><h2>Danger zone</h2><p class="muted">Resetting deletes this browser's portfolio state and restores demo data.</p><button class="btn danger" id="reset">Reset demo</button></div></div>'
+  return'<div class="grid two"><div class="card"><h2>Privacy & local lock</h2><p class="muted">The PIN locks the app UI in this browser. It is not encryption and does not protect data from developer-tools access.</p><div class="form"><div class="field"><label>New PIN</label><input class="input wide" id="pin1" type="password" maxlength="8" inputmode="numeric" placeholder="4–8 digits"></div><div class="field"><label>Confirm PIN</label><input class="input wide" id="pin2" type="password" maxlength="8" inputmode="numeric"></div></div><div class="modalfoot"><button class="btn" id="setpin">'+(p?"Change PIN":"Set PIN")+'</button><button class="btn" id="lockNow">Lock now</button></div><div class="muted">Auto-lock <select class="select" id="autolock"><option value="0">Never</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></div></div><div class="card"><h2>Automatic backup / restore</h2><p class="muted">Automatic snapshots are stored locally in IndexedDB. The app also keeps the primary portfolio in localStorage.</p><div class="sourcebar"><span class="status"><i class="dot"></i> Auto backup: On</span><span class="status">Last snapshot: '+(b.lastBackupAt?new Date(b.lastBackupAt).toLocaleString("en-IN"):"Not yet")+'</span></div><div class="modalfoot"><button class="btn" id="backupNow">Backup now</button><button class="btn" id="restoreBackup">Restore latest</button><button class="btn" id="export">Export JSON</button><label class="btn">Import JSON<input id="importJson" type="file" accept=".json" hidden></label></div></div></div><div class="grid two" style="margin-top:12px"><div class="card"><h2>Market data & reliability</h2><p class="muted">Stocks/ETFs use Yahoo Finance with NSE fallback where available. Mutual funds use AMFI. Research and news use Yahoo Finance. Failed refreshes do not overwrite the last known good quote.</p><label class="muted">Quote cache TTL (seconds)<input class="input" id="ttl" type="number" min="10" value="'+(Number(s.settings.market.refreshTtl)/1000)+'"></label>'+sources()+'</div><div class="card"><h2>Danger zone</h2><p class="muted">Resetting deletes this browser portfolio state and restores demo data.</p><button class="btn danger" id="reset">Reset demo</button></div></div>'
 }
 }
 function openModal(html){$("modal").innerHTML=html;$("mb").classList.remove("hidden")}
 function closeModal(){$("mb").classList.add("hidden")}
 
-async function loadMF(){
+async async function loadMF(){
   if(mfCache)return mfCache;const r=await fetch("/api/mf");const d=await r.json();if(!r.ok)throw new Error(d.error||"AMFI unavailable");mfCache=d;return d
 }
 function fill(select,items,placeholder,disabled=false){select.innerHTML='<option value="">'+esc(placeholder)+'</option>'+items.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join("");select.disabled=disabled}
-async function setupMF(form){
+async async function setupMF(form){
   const box=$("mfbox"),amc=$("mfamc"),scheme=$("mfscheme"),plan=$("mfplan"),option=$("mfoption"),meta=$("mfmeta");
   try{const d=await loadMF();fill(amc,d.amcs||[],"Select AMC...");amc.onchange=()=>{const names=[...new Set((d.schemes||[]).filter(x=>x.amc===amc.value).map(x=>x.name))].sort();fill(scheme,names,"Select scheme...");fill(plan,[],"Select scheme first...",true);fill(option,[],"Select plan first...",true)};scheme.onchange=()=>{const rows=d.schemes.filter(x=>x.amc===amc.value&&x.name===scheme.value);fill(plan,[...new Set(rows.map(x=>x.plan))],"Select plan...");fill(option,[],"Select plan first...",true)};plan.onchange=()=>{const rows=d.schemes.filter(x=>x.amc===amc.value&&x.name===scheme.value&&x.plan===plan.value);fill(option,[...new Set(rows.map(x=>x.option))],"Select option...")};option.onchange=()=>{const row=d.schemes.find(x=>x.amc===amc.value&&x.name===scheme.value&&x.plan===plan.value&&x.option===option.value);if(!row)return;form.elements.symbol.value=row.code;form.elements.name.value=row.name+" — "+row.plan+" — "+row.option;form.elements.price.value=row.nav;form.elements.exchange.value="AMFI";meta.innerHTML="<b>Selected:</b> "+esc(row.name)+" · "+esc(row.plan)+" · "+esc(row.option)+" · NAV ₹"+Number(row.nav).toFixed(4)+" · "+esc(row.date||"")}}
   catch(e){meta.textContent="AMFI list unavailable. Enter the scheme code manually."}
@@ -279,7 +279,7 @@ document.addEventListener("change",e=>{
 });
 $("mb").onclick=e=>{if(e.target===$("mb"))closeModal()};
 $("unlockPin").addEventListener("keydown",e=>{if(e.key==="Enter")unlock()});
-async function refreshQuotes(){
+async async function refreshQuotes(){
   const hs=holdings(),before={};hs.forEach(h=>before[h.symbol]=q[h.symbol]||null);
   let ok=0;await Promise.all(hs.map(async h=>{try{await fetchQuote(h.symbol,h.exchange,true);ok++}catch(_){} }));Object.keys(before).forEach(k=>{if(before[k]!=null)q[k+"_prev"]=before[k]});saveQuotes();s.meta.lastQuoteRefreshAt=Date.now();save();render();alert(ok+" quote(s) refreshed.")}
 render();
