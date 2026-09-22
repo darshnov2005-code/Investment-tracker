@@ -95,13 +95,31 @@ async function fetchQuote(symbol,exchange,force=false){
 
 function holdings(){
   const m={};
-  s.transactions.forEach(t=>{
-    const k=t.type+"|"+t.symbol;if(!m[k])m[k]={type:t.type,name:t.name,symbol:t.symbol,exchange:t.exchange,qty:0,cost:0};
+  const tx=s.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  tx.forEach(t=>{
+    const k=t.type+"|"+t.symbol;
+    if(!m[k])m[k]={type:t.type,name:t.name,symbol:t.symbol,exchange:t.exchange,qty:0,cost:0};
     const h=m[k],n=Number(t.qty)||0,gross=n*(Number(t.price)||0),c=totalCharges(t);
-    if(["BUY","SIP","BONUS","RIGHTS"].includes(t.action)){h.qty+=n;h.cost+=gross+c}
-    if(["SELL","REDEMPTION"].includes(t.action)){const avg=h.qty?h.cost/h.qty:Number(t.price)||0;h.qty-=n;h.cost-=n*avg}
+    if(["BUY","SIP","BONUS","RIGHTS"].includes(t.action)){
+      h.qty+=n;
+      h.cost+=gross+c;
+    }else if(["SELL","REDEMPTION"].includes(t.action)){
+      // Reduce only the sold quantity from the existing cost basis.
+      // The remaining quantity and its proportional cost stay in the portfolio.
+      const avgCost=h.qty>0?h.cost/h.qty:0;
+      const sellQty=Math.min(n,h.qty);
+      h.qty-=sellQty;
+      h.cost-=sellQty*avgCost;
+      if(h.qty<1e-10){h.qty=0;h.cost=0}
+    }
   });
-  return Object.values(m).filter(h=>h.qty>0).map(h=>{h.avg=h.cost/h.qty;h.current=price(h);h.value=h.qty*h.current;h.pnl=h.value-h.cost;return h})
+  return Object.values(m).filter(h=>h.qty>0).map(h=>{
+    h.avg=h.cost/h.qty;
+    h.current=price(h);
+    h.value=h.qty*h.current;
+    h.pnl=h.value-h.cost;
+    return h
+  })
 }
 function realizedLots(){
   const lots={},out=[];
