@@ -64,9 +64,9 @@ export default async function handler(req, res) {
       const r = await fetch("https://www.amfiindia.com/spages/NAVAll.txt", { headers });
       if (!r.ok) throw new Error("AMFI HTTP " + r.status);
       const text = await r.text();
-      const row = text.split(/\\r?\\n/).find(x => x.split(";")[0].trim() === symbol);
+      const row = text.split(/\r?\n/).find(x => { const c=x.split(";").map(v=>v.trim()); return c[0]===symbol || c[1]===symbol || c[2]===symbol; });
       if (!row) return res.status(404).json({ error: "AMFI scheme code not found", symbol });
-      const p = Number(row.split(";")[4]);
+      const cols = row.split(";").map(v => v.trim());\n      const p = Number(cols[4]);
       if (!Number.isFinite(p)) throw new Error("Invalid AMFI NAV");
       return res.status(200).json({ symbol, exchange: "AMFI", price: p, currency: "INR", source: "AMFI" });
     }
