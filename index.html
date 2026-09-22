@@ -33,8 +33,93 @@ function imp(){return'<div class="card"><h2>CSV import</h2><p class="muted">Colu
 function settings(){return'<div class="grid two"><div class="card"><h2>Market data</h2><p class="muted">Stocks/ETFs use NSE/BSE providers. Mutual funds use AMFI NAV data.</p></div><div class="card"><h2>Data controls</h2><p class="muted">Portfolio data is stored in this browser.</p><button class="btn" id="export">Export JSON</button> <button class="btn danger" id="reset">Reset demo</button></div></div>'}
 function render(){var map={dashboard:dash,holdings:hold,transactions:tx,realized:realized,goals:goals,import:imp,settings:settings},titles={dashboard:"Dashboard",holdings:"Holdings",transactions:"Transactions",realized:"Realised P/L",goals:"Goals",import:"CSV Import",settings:"Settings"};document.getElementById("title").textContent=titles[page];document.querySelectorAll(".nav button").forEach(function(b){b.classList.toggle("active",b.dataset.page===page)});document.getElementById("view").innerHTML=map[page]()}
 function close(){document.getElementById("mb").classList.add("hidden")}
-async function loadMF(select){try{select.innerHTML='<option>Loading AMFI schemes...</option>';var r=await fetch("/api/mf");var d=await r.json();if(!r.ok)throw new Error(d.error||"AMFI unavailable");select.innerHTML='<option value="">Select mutual fund scheme...</option>'+d.schemes.map(function(m){return'<option value="'+E(m.code)+'" data-name="'+E(m.name)+'" data-nav="'+m.nav+'">'+E(m.name)+" — NAV ₹"+Number(m.nav).toFixed(4)+"</option>"}).join("")}catch(e){select.innerHTML='<option value="">AMFI list unavailable</option>';console.error(e)}}
-function openTx(symbol){var old=symbol?s.transactions.find(function(x){return x.symbol===symbol}):null;document.getElementById("modal").innerHTML='<h2>'+(old?"Edit transaction":"Add investment")+'</h2><form id="f"><div class="form"><div class="field"><label>Type</label><select class="select wide" name="type"><option>STOCK</option><option>MUTUAL_FUND</option><option>ETF</option><option>FD</option><option>BOND</option><option>SGB</option><option>PPF</option><option>NPS</option><option>GOLD</option><option>CASH</option><option>OTHER</option></select></div><div class="field"><label>Action</label><select class="select wide" name="action"><option>BUY</option><option>SELL</option><option>SIP</option><option>DIVIDEND</option><option>BONUS</option><option>SPLIT</option><option>RIGHTS</option><option>REDEMPTION</option></select></div><div class="field full"><label>Name</label><input class="input wide" name="name" required></div><div class="field full hidden" id="mfbox"><label>Mutual fund scheme — AMFI</label><select class="select wide" id="mfselect"><option>Select scheme...</option></select></div><div class="field"><label>Symbol / scheme code</label><input class="input wide" name="symbol" required></div><div class="field"><label>Exchange / source</label><select class="select wide" name="exchange"><option>NSE</option><option>BSE</option><option>AMFI</option><option>OTHER</option></select></div><div class="field"><label>Date</label><input class="input wide" type="date" name="date" required value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Quantity / units</label><input class="input wide" type="number" step="any" name="qty" required></div><div class="field"><label>Price / NAV</label><input class="input wide" type="number" step="any" name="price" required></div><div class="field"><label>Charges</label><input class="input wide" type="number" step="any" name="charges" value="0"></div><div class="field full"><label>Notes</label><input class="input wide" name="notes"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Save</button></div></form>';var f=document.getElementById("f"),type=f.elements.type,box=document.getElementById("mfbox"),ms=document.getElementById("mfselect"),ex=f.elements.exchange;function showMF(){box.classList.remove("hidden");ex.value="AMFI";loadMF(ms)}type.onchange=function(){if(type.value==="MUTUAL_FUND")showMF();else box.classList.add("hidden")};ms.onchange=function(){var o=ms.options[ms.selectedIndex];if(!o.value)return;f.elements.symbol.value=o.value;f.elements.name.value=o.dataset.name;f.elements.price.value=o.dataset.nav;q[o.value]=Number(o.dataset.nav);saveQuotes()};if(old){Object.keys(old).forEach(function(k){if(f.elements[k])f.elements[k].value=old[k]});if(old.type==="MUTUAL_FUND")showMF()}document.getElementById("mb").classList.remove("hidden");document.getElementById("close").onclick=close;f.onsubmit=async function(e){e.preventDefault();var o=Object.fromEntries(new FormData(f));o.id=old?old.id:String(Date.now());o.qty=Number(o.qty);o.price=Number(o.price);o.charges=Number(o.charges);if(o.exchange==="AMFI"&&o.symbol){try{await fetchQuote(o.symbol,"AMFI")}catch(err){}}if(old)s.transactions=s.transactions.map(function(x){return x.id===old.id?o:x});else s.transactions.push(o);save();close();render()}}
+var mfCache = null;
+
+async function loadMFData(){
+  if(mfCache) return mfCache;
+  var r=await fetch("/api/mf");
+  var d=await r.json();
+  if(!r.ok) throw new Error(d.error||"AMFI unavailable");
+  mfCache=d;
+  return d;
+}
+
+function fillMFSelect(select,items,placeholder,disabled){
+  select.innerHTML='<option value="">'+E(placeholder)+'</option>'+items.map(function(x){
+    var value=typeof x==="string"?x:x.value;
+    var label=typeof x==="string"?x:x.label;
+    return '<option value="'+E(value)+'">'+E(label)+'</option>';
+  }).join("");
+  select.disabled=!!disabled;
+}
+
+async function setupMFSelectors(f){
+  var box=document.getElementById("mfbox"),amc=document.getElementById("mfamc"),scheme=document.getElementById("mfscheme"),plan=document.getElementById("mfplan"),option=document.getElementById("mfoption"),meta=document.getElementById("mfmeta");
+  try{
+    var d=await loadMFData();
+    fillMFSelect(amc,d.amcs||[],"Select AMC...",false);
+    amc.onchange=function(){
+      var rows=(d.schemes||[]).filter(function(x){return x.amc===amc.value});
+      var names=[...new Set(rows.map(function(x){return x.name}))].sort(function(a,b){return a.localeCompare(b)});
+      fillMFSelect(scheme,names,"Select scheme...",false);
+      fillMFSelect(plan,[],"Select scheme first...",true);
+      fillMFSelect(option,[],"Select plan first...",true);
+      meta.textContent="Now select the mutual fund scheme.";
+    };
+    scheme.onchange=function(){
+      var rows=(d.schemes||[]).filter(function(x){return x.amc===amc.value&&x.name===scheme.value});
+      fillMFSelect(plan,[...new Set(rows.map(function(x){return x.plan}))],"Select plan...",false);
+      fillMFSelect(option,[],"Select plan first...",true);
+      meta.textContent="Choose Direct or Regular plan.";
+    };
+    plan.onchange=function(){
+      var rows=(d.schemes||[]).filter(function(x){return x.amc===amc.value&&x.name===scheme.value&&x.plan===plan.value});
+      fillMFSelect(option,[...new Set(rows.map(function(x){return x.option}))],"Select option...",false);
+      meta.textContent="Choose Growth, IDCW/Dividend or Reinvestment where available.";
+    };
+    option.onchange=function(){
+      var rows=(d.schemes||[]).filter(function(x){return x.amc===amc.value&&x.name===scheme.value&&x.plan===plan.value&&x.option===option.value});
+      var row=rows[0];
+      if(!row)return;
+      f.elements.symbol.value=row.code;
+      f.elements.name.value=row.name+" — "+row.plan+" — "+row.option;
+      f.elements.price.value=row.nav;
+      f.elements.exchange.value="AMFI";
+      q[row.code]=Number(row.nav);
+      saveQuotes();
+      meta.innerHTML="<b>Selected:</b> "+E(row.name)+" · "+E(row.plan)+" · "+E(row.option)+" · NAV ₹"+Number(row.nav).toFixed(4)+" · NAV date "+E(row.date||"—")+" · ISIN "+E(row.isin||row.isinReinvest||"—");
+    };
+  }catch(e){
+    amc.innerHTML='<option value="">AMFI list unavailable</option>';
+    scheme.innerHTML='<option value="">Unable to load schemes</option>';
+    scheme.disabled=true;plan.disabled=true;option.disabled=true;
+    meta.textContent="Could not load the AMFI scheme database. You can still enter the scheme code manually.";
+    console.error(e);
+  }
+}
+
+function openTx(symbol){
+  var old=symbol?s.transactions.find(function(x){return x.symbol===symbol}):null;
+  document.getElementById("modal").innerHTML='<h2>'+(old?"Edit transaction":"Add investment")+'</h2><form id="f"><div class="form"><div class="field"><label>Type</label><select class="select wide" name="type"><option>STOCK</option><option>MUTUAL_FUND</option><option>ETF</option><option>FD</option><option>BOND</option><option>SGB</option><option>PPF</option><option>NPS</option><option>GOLD</option><option>CASH</option><option>OTHER</option></select></div><div class="field"><label>Action</label><select class="select wide" name="action"><option>BUY</option><option>SELL</option><option>SIP</option><option>DIVIDEND</option><option>BONUS</option><option>SPLIT</option><option>RIGHTS</option><option>REDEMPTION</option></select></div><div class="field full"><label>Name</label><input class="input wide" name="name" required></div><div class="field full hidden" id="mfbox"><label>Mutual fund selection — AMFI</label><div class="form" style="margin:0"><div class="field"><label>AMC</label><select class="select wide" id="mfamc"><option>Select AMC...</option></select></div><div class="field"><label>Scheme</label><select class="select wide" id="mfscheme" disabled><option>Select AMC first...</option></select></div><div class="field"><label>Plan</label><select class="select wide" id="mfplan" disabled><option>Select scheme first...</option></select></div><div class="field"><label>Option</label><select class="select wide" id="mfoption" disabled><option>Select plan first...</option></select></div></div><div class="notice" id="mfmeta" style="margin-top:10px">Select AMC → Scheme → Plan → Option. The AMFI code, ISIN and latest NAV will be filled automatically.</div></div><div class="field"><label>Symbol / AMFI scheme code</label><input class="input wide" name="symbol" required></div><div class="field"><label>Exchange / source</label><select class="select wide" name="exchange"><option>NSE</option><option>BSE</option><option>AMFI</option><option>OTHER</option></select></div><div class="field"><label>Date</label><input class="input wide" type="date" name="date" required value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Quantity / units</label><input class="input wide" type="number" step="any" name="qty" required></div><div class="field"><label>Price / NAV</label><input class="input wide" type="number" step="any" name="price" required></div><div class="field"><label>Charges</label><input class="input wide" type="number" step="any" name="charges" value="0"></div><div class="field full"><label>Notes</label><input class="input wide" name="notes"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Save</button></div></form>';
+  var f=document.getElementById("f"),type=f.elements.type,box=document.getElementById("mfbox"),ex=f.elements.exchange;
+  function showMF(){box.classList.remove("hidden");ex.value="AMFI";setupMFSelectors(f)}
+  type.onchange=function(){if(type.value==="MUTUAL_FUND")showMF();else box.classList.add("hidden")};
+  if(old){
+    Object.keys(old).forEach(function(k){if(f.elements[k])f.elements[k].value=old[k]});
+    if(old.type==="MUTUAL_FUND")showMF();
+  }
+  document.getElementById("mb").classList.remove("hidden");
+  document.getElementById("close").onclick=close;
+  f.onsubmit=async function(e){
+    e.preventDefault();
+    var o=Object.fromEntries(new FormData(f));
+    o.id=old?old.id:String(Date.now());o.qty=Number(o.qty);o.price=Number(o.price);o.charges=Number(o.charges);
+    if(o.exchange==="AMFI"&&o.symbol){try{await fetchQuote(o.symbol,"AMFI")}catch(err){}}
+    if(old)s.transactions=s.transactions.map(function(x){return x.id===old.id?o:x});else s.transactions.push(o);
+    save();close();render();
+  };
+}
+
 function openGoal(){document.getElementById("modal").innerHTML='<h2>Add financial goal</h2><form id="gf"><div class="form"><div class="field full"><label>Goal name</label><input class="input wide" name="name" required placeholder="₹10 lakh portfolio"></div><div class="field"><label>Target amount</label><input class="input wide" type="number" name="target" required></div><div class="field"><label>Target date</label><input class="input wide" type="date" name="date"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Create</button></div></form>';document.getElementById("mb").classList.remove("hidden");document.getElementById("close").onclick=close;document.getElementById("gf").onsubmit=function(e){e.preventDefault();var o=Object.fromEntries(new FormData(e.target));o.id=String(Date.now());o.target=Number(o.target);s.goals.push(o);save();close();render()}}
 document.addEventListener("click",function(e){var p=e.target.closest("[data-page]");if(p){page=p.dataset.page;render();return}if(e.target.id==="add"||e.target.id==="add2")openTx();if(e.target.dataset.edit)openTx(e.target.dataset.edit);if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(function(x){return x.id!==e.target.dataset.del});save();render()}if(e.target.id==="goal")openGoal();if(e.target.id==="import"){var lines=document.getElementById("csv").value.trim().split(/\r?\n/).filter(Boolean);lines.forEach(function(x){var c=x.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+Math.random()),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported")}if(e.target.id==="export"){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup.json";a.click()}if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={transactions:demo,goals:[]};save();render()}});
 document.addEventListener("input",function(e){if(e.target.id==="search"||e.target.id==="filter"){var qv=(document.getElementById("search").value||"").toLowerCase(),fv=document.getElementById("filter").value;document.getElementById("hm").innerHTML=table(H().filter(function(x){return(!fv||x.type===fv)&&(!qv||x.name.toLowerCase().indexOf(qv)>=0||x.symbol.toLowerCase().indexOf(qv)>=0)}))}});
