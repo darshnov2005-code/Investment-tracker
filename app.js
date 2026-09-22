@@ -28,7 +28,7 @@ normalizeState();
 let page="dashboard", mfCache=null, saveTimer=null, lastActivity=Date.now(), locked=false;
 
 const $=id=>document.getElementById(id);
-function esc(x){return String(x==null?"":x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/\x27/g,"&#39;")}
 function money(n){return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:2}).format(Number(n)||0)}
 function num(n){return new Intl.NumberFormat("en-IN",{maximumFractionDigits:3}).format(Number(n)||0)}
 function pct(n){return (Number(n)>=0?"+":"")+Number(n||0).toFixed(2)+"%"}
