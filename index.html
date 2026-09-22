@@ -145,7 +145,7 @@ var technicalCache={};
 var marketScannerCache=null;
 
 function scanner(){
-  return '<div class="card"><div class="head" style="margin:0 0 12px"><h2>Market-Wide Technical Scanner</h2><span class="muted">NSE market stocks · live scanner lists</span></div><div class="search"><button class="btn primary" id="marketScan">Refresh Market Scanner</button><select class="select" id="marketLimit"><option value="25">Top 25</option><option value="50" selected>Top 50</option><option value="100">Top 100</option></select></div><div class="notice">This scanner is market-wide — you do not need to search for a stock. It pulls NSE scanner lists and shows stocks appearing in volume-gainer, 52-week-high and 52-week-low screens.</div></div><div id="marketResult" style="margin-top:12px"><div class="card empty">Click “Refresh Market Scanner” to load the current market-wide stocks.</div></div>';
+  return '<div class="card"><div class="head" style="margin:0 0 12px"><h2>Market-Wide Technical Scanner</h2><span class="muted">Market-wide technical scanner · latest available data</span></div><div class="search"><button class="btn primary" id="marketScan">Refresh Market Scanner</button><select class="select" id="marketLimit"><option value="25">Top 25</option><option value="50" selected>Top 50</option><option value="100">Top 100</option></select></div><div class="notice">This scanner is market-wide — you do not need to search for a stock. It pulls NSE scanner lists and shows stocks appearing in volume-gainer, 52-week-high and 52-week-low screens.</div></div><div id="marketResult" style="margin-top:12px"><div class="card empty">Click “Refresh Market Scanner” to load the current market-wide stocks.</div></div>';
 }
 
 function marketTable(rows,kind,limit){
@@ -163,11 +163,13 @@ function marketTable(rows,kind,limit){
 
 async function loadMarketScanner(){
   var out=document.getElementById("marketResult");
-  out.innerHTML='<div class="card empty">Loading market-wide NSE scanner…</div>';
+  out.innerHTML='<div class="card empty">Loading market-wide technical scanner…</div>';
   try{
     var r=await fetch("/api/market-scanner");
-    var d=await r.json();
-    if(!r.ok)throw new Error(d.error||"Market scanner unavailable");
+    var raw=await r.text();
+    var d;
+    try{d=JSON.parse(raw)}catch(_){throw new Error(raw.slice(0,180)||("HTTP "+r.status))}
+    if(!r.ok)throw new Error(d.error||d.detail||"Market scanner unavailable");
     marketScannerCache=d;
     var limit=Number(document.getElementById("marketLimit").value)||50;
     out.innerHTML='<div class="head"><h2>Market Scanner Results</h2><span class="muted">Updated '+new Date(d.fetchedAt).toLocaleTimeString("en-IN")+'</span></div><div class="grid three">'+
