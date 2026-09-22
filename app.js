@@ -302,7 +302,8 @@ function render(){
 }
 document.addEventListener("click",e=>{
   const nav=e.target.closest("[data-page]");if(nav){page=nav.dataset.page;render();return}
-  if(e.target.id==="privacyEye"){privacyHidden=!privacyHidden;localStorage.setItem("investtrack-privacy-hidden",privacyHidden?"1":"0");render();return}\n  if(e.target.id==="add"||e.target.id==="add2")openTx();
+  if(e.target.id==="privacyEye"){privacyHidden=!privacyHidden;localStorage.setItem("investtrack-privacy-hidden",privacyHidden?"1":"0");render();return}
+  if(e.target.id==="add"||e.target.id==="add2")openTx();
   if(e.target.dataset.edit)openTx(e.target.dataset.edit);
   if(e.target.id==="goal")openGoal();
   if(e.target.id==="researchRun")runResearch();
