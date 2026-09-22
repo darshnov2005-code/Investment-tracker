@@ -1,25 +1,44 @@
 # Investment Tracker — India
 
-A responsive personal investment tracker built around the requirements discussed in ChatGPT.
+A responsive personal investment tracker designed for Indian stocks, mutual funds/SIPs and other assets.
+
+## Architecture
+- Static frontend shell in `index.html` with the application logic separated into `app.js`.
+- Portfolio data remains browser-local: `localStorage` is the primary store, with automatic IndexedDB snapshots for local backup/restore.
+- No Supabase, login system or hosted portfolio database is required.
+- Market data is isolated behind server-side Vercel API routes so the UI can change providers without changing the portfolio model.
+- State is versioned (`investtrack-v4`) and legacy `investtrack-v3` data is migrated automatically.
+- Quote caching, request timeouts and stale-value preservation improve reliability.
 
 ## Included
-- Dashboard: invested cost, current value, overall P/L, return %, realised P/L and allocation.
-- Indian stocks with NSE/BSE fields.
-- Mutual funds/SIPs with AMFI/source fields.
-- ETFs, FD, bonds, SGB, PPF, NPS, gold, cash and other assets.
-- Separate transaction ledger; repeated purchases of the same script remain separate transactions but are consolidated into one holding with an average price.
-- Buy, sell, SIP, dividend, bonus, split, rights and redemption transaction types.
-- Transaction date, quantity, price/NAV, charges and notes.
-- FIFO realised gain/loss and unrealised P/L.
-- Goals with target amount/date and progress.
-- Search/filter, edit/delete, CSV import and JSON backup.
-- Responsive mobile UI.
-- Local browser persistence.
+- Dashboard with portfolio value, invested cost, unrealised/realised P/L, XIRR, allocation, top movers and portfolio insights.
+- Holdings across stocks, mutual funds, ETFs, FD, bonds, SGB, PPF, NPS, gold, cash and other assets.
+- Transaction ledger with BUY, SELL, SIP, dividend, bonus, split, rights and redemption actions.
+- Detailed transaction charges: brokerage, STT, GST and other charges.
+- FIFO realised P/L with holding-period buckets.
+- Financial goals with target date, progress source and monthly contribution planning.
+- Stock research with valuation, profitability, growth, leverage, liquidity, cash flow and trend metrics.
+- Transparent rule-based screening signal with visible scoring inputs.
+- News & Events page for recent stock news.
+- AMFI mutual-fund selection with AMC → scheme → plan → option.
+- CSV import and JSON export/import.
+- Local PIN lock with optional auto-lock.
+- Automatic local backup snapshots and restore.
+- Data-source transparency and quote-cache status.
+- Mobile-first responsive navigation and tables.
+- No portfolio data is sent to a shared database.
 
-## Market-data architecture
-The UI currently includes clearly identifiable demo quote values so the tracker works immediately without credentials. The `price()` function in `index.html` is the quote-provider integration point.
+## Data sources
+- NSE/BSE stock and ETF quotes: Yahoo Finance with an NSE fallback where available.
+- Mutual fund NAVs and scheme catalogue: AMFI.
+- Stock research and news: Yahoo Finance.
+- Provider failures do not overwrite the last known good quote.
 
-For production real-time NSE/BSE/AMFI prices, use a server-side market-data proxy/provider. Direct browser calls to exchange sites can be restricted by CORS, cookies, anti-bot controls and rate limits. Portfolio calculations are independent of the quote provider, so the live-data layer can be replaced without changing the transaction model.
+## Privacy note
+The local PIN is a convenience/privacy lock for the browser UI. It is not equivalent to encryption and should not be treated as protection against someone with access to the browser's developer tools or local profile.
+
+## Backup note
+Automatic snapshots are stored in IndexedDB on the same browser/device. For stronger disaster recovery, use **Export JSON** periodically and keep the downloaded backup somewhere separate.
 
 ## Run
-Open `index.html` directly or serve the repository with a static web server.
+Deploy through Vercel or serve the repository with a static web server. The API routes require a serverless deployment for live market data, AMFI and news.
