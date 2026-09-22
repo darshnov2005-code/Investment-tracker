@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   // scan results after market close. We use public scan pages rather than
   // requiring the user to search for a symbol.
   async function chartink(slug) {
-    const r = await fetch("https://chartink.com/screener/" + encodeURIComponent(slug), {headers});
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 5000); let r; try { r = await fetch("https://chartink.com/screener/" + encodeURIComponent(slug), {headers, signal: controller.signal}); } finally { clearTimeout(timer); }
     if (!r.ok) throw new Error("Chartink HTTP " + r.status);
     return await r.text();
   }
@@ -28,17 +28,17 @@ export default async function handler(req, res) {
     const out = [];
     // Chartink renders matched stocks in table rows. This parser is deliberately
     // tolerant because the public page markup changes occasionally.
-    const rows = html.match(/<tr[\\s\\S]*?<\\/tr>/gi) || [];
+    const rows = html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
     for (const row of rows) {
-      const cells = (row.match(/<t[dh][^>]*>[\\s\\S]*?<\\/t[dh]>/gi) || []).map(cleanText);
+      const cells = (row.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || []).map(cleanText);
       if (cells.length < 3) continue;
-      const symbol = cells.find(x => /^[A-Z0-9&._-]{2,30}$/.test(x) && !/^Sr\\.?$/i.test(x));
+      const symbol = cells.find(x => /^[A-Z0-9&._-]{2,30}$/.test(x) && !/^Sr\.?$/i.test(x));
       if (!symbol || /^(SYMBOL|STOCK|CLOSE|VOLUME|MARKETCAP)$/i.test(symbol)) continue;
       const nums = cells.map(num).filter(x => x !== null);
       const price = nums.length ? nums[0] : null;
       const change = cells.map(x => num(x)).find(x => x !== null && Math.abs(x) <= 100);
       const volume = nums.length > 1 ? nums[nums.length - 1] : null;
-      const name = cells.find(x => x.length > 2 && !/^[A-Z0-9&._-]+$/.test(x) && !/^[-+]?\\d/.test(x)) || symbol;
+      const name = cells.find(x => x.length > 2 && !/^[A-Z0-9&._-]+$/.test(x) && !/^[-+]?\d/.test(x)) || symbol;
       out.push({symbol, name, price, change, volume});
     }
     const seen = new Set();
