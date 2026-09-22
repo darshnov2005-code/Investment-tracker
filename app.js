@@ -374,7 +374,9 @@ document.addEventListener("click",e=>{
   if(e.target.id==="addSip"){openSip();return}
   if(e.target.dataset.sipAdd){openSipInstallment(e.target.dataset.sipAdd);return}
   if(e.target.dataset.sipDetails){sipDetails(e.target.dataset.sipDetails);return}
-  if(e.target.dataset.buy){openTx(e.target.dataset.buy,"BUY");return}\n  if(e.target.dataset.sell){openTx(e.target.dataset.sell,"SELL");return}\n  if(e.target.id==="add"||e.target.id==="add2")openTx();
+  if(e.target.dataset.buy){openTx(e.target.dataset.buy,"BUY");return}
+  if(e.target.dataset.sell){openTx(e.target.dataset.sell,"SELL");return}
+  if(e.target.id==="add"||e.target.id==="add2")openTx();
   if(e.target.dataset.edit)openTx(e.target.dataset.edit);
   if(e.target.id==="goal")openGoal();
   if(e.target.id==="researchRun")runResearch();
