@@ -23,3 +23,27 @@ For production real-time NSE/BSE/AMFI prices, use a server-side market-data prox
 
 ## Run
 Open `index.html` directly or serve the repository with a static web server.
+
+## Private multi-user mode
+
+The tracker now supports account-based private portfolios using Supabase Auth + Row Level Security.
+
+### One-time setup
+
+1. Create a Supabase project.
+2. In Supabase SQL Editor, run `supabase-schema.sql`.
+3. In Supabase Authentication, configure email/password sign-in. If email confirmation is enabled, users must verify their email before signing in.
+4. In Vercel → Project → Settings → Environment Variables, add:
+   - `SUPABASE_URL` = your Supabase project URL
+   - `SUPABASE_ANON_KEY` = your Supabase publishable/anon key
+5. Redeploy the Vercel project.
+
+Each signed-in user gets a separate row in `public.portfolios`. Row Level Security allows a user to read/write only their own row, so sharing the website URL does not expose your investment data.
+
+The Supabase anon/publishable key is intended for browser use; the database security comes from the RLS policies. Do not put a Supabase service-role key in the browser or commit it to GitHub.
+
+### Developer rights
+
+Keep your **Vercel account/team ownership** separate from normal app users. App users do not need Vercel access.
+
+For a developer who needs to work on the deployment, add them to the Vercel team with the **Developer** role, and give project-level access as required. Keep Owner/Admin access only for people who need billing/team/security control.
