@@ -145,43 +145,33 @@ var technicalCache={};
 var marketScannerCache=null;
 
 function scanner(){
-  return '<div class="card"><div class="head" style="margin:0 0 12px"><h2>Market-Wide Technical Scanner</h2><span class="muted">Market-wide technical scanner · latest available data</span></div><div class="search"><button class="btn primary" id="marketScan">Refresh Market Scanner</button><select class="select" id="marketLimit"><option value="25">Top 25</option><option value="50" selected>Top 50</option><option value="100">Top 100</option></select></div><div class="notice">This scanner is market-wide — you do not need to search for a stock. It pulls NSE scanner lists and shows stocks appearing in volume-gainer, 52-week-high and 52-week-low screens.</div></div><div id="marketResult" style="margin-top:12px"><div class="card empty">Click “Refresh Market Scanner” to load the current market-wide stocks.</div></div>';
-}
-
-function marketTable(rows,kind,limit){
-  rows=(rows||[]).slice(0,limit);
-  if(!rows.length)return'<div class="card empty">No stocks returned by this scanner right now.</div>';
-  var title=kind==="volume"?"Volume Surge / Volume Gainers":kind==="high"?"Near 52-Week High":"Near 52-Week Low";
-  return'<div class="card"><div class="head" style="margin:0 0 10px"><h2>'+title+'</h2><span class="muted">'+rows.length+' stocks</span></div><div class="tablewrap"><table class="table"><thead><tr><th>Stock</th><th>LTP</th><th>Change</th><th>Volume</th><th>52W High</th><th>52W Low</th><th>Signal</th></tr></thead><tbody>'+
-    rows.map(function(x){
-      var nearH=x.high52&&x.price?((x.high52-x.price)/x.high52*100):null;
-      var nearL=x.low52&&x.price?((x.price-x.low52)/x.low52*100):null;
-      var sig=kind==="volume"?"Volume activity":kind==="high"?(nearH!=null?nearH.toFixed(2)+"% below high":"Near high"):(nearL!=null?nearL.toFixed(2)+"% above low":"Near low");
-      return'<tr><td><div class="asset">'+E(x.name||x.symbol)+'</div><div class="sub">'+E(x.symbol)+'</div></td><td>'+M(x.price)+'</td><td class="'+(x.change>=0?"green":"red")+'">'+(Number.isFinite(x.change)?P(x.change):"—")+'</td><td>'+N(x.volume)+'</td><td>'+M(x.high52)+'</td><td>'+M(x.low52)+'</td><td><span class="pill">'+E(sig)+'</span></td></tr>';
-    }).join("")+'</tbody></table></div></div>';
+  return '<div class="card"><div class="head" style="margin:0 0 12px"><h2>Volume Spike + Strong Trend</h2><span class="muted">Daily timeframe · Chartink</span></div><div class="search"><button class="btn primary" id="marketScan">Refresh Scanner</button><select class="select" id="marketLimit"><option value="25">Top 25</option><option value="50" selected>Top 50</option><option value="100">Top 100</option><option value="200">Top 200</option></select></div><div class="notice">Market-wide NSE cash stocks. Conditions: Volume &gt; 2× 20-day average volume, 20 DMA &gt; 50 DMA &gt; 200 DMA, and Close &gt; 20 DMA.</div></div><div id="marketResult" style="margin-top:12px"><div class="card empty">Click “Refresh Scanner” to load matching stocks.</div></div>';
 }
 
 async function loadMarketScanner(){
   var out=document.getElementById("marketResult");
-  out.innerHTML='<div class="card empty">Loading market-wide technical scanner…</div>';
+  out.innerHTML='<div class="card empty">Loading Chartink daily scanner…</div>';
   try{
     var r=await fetch("/api/market-scanner");
     var raw=await r.text();
     var d;
     try{d=JSON.parse(raw)}catch(_){throw new Error(raw.slice(0,180)||("HTTP "+r.status))}
-    if(!r.ok)throw new Error(d.error||d.detail||"Market scanner unavailable");
+    if(!r.ok)throw new Error(d.error||d.detail||"Technical scanner unavailable");
     marketScannerCache=d;
-    var limit=Number(document.getElementById("marketLimit").value)||50;
-    out.innerHTML='<div class="head"><h2>Market Scanner Results</h2><span class="muted">Updated '+new Date(d.fetchedAt).toLocaleTimeString("en-IN")+'</span></div><div class="grid three">'+
-      metric("Volume Surge",String((d.volumeSurge||[]).length),"NSE volume-gainer list")+
-      metric("52W High",String((d.near52High||[]).length),"NSE 52-week-high list")+
-      metric("52W Low",String((d.near52Low||[]).length),"NSE 52-week-low list")+
-      '</div><div style="margin-top:12px">'+marketTable(d.volumeSurge,"volume",limit)+'</div><div style="margin-top:12px">'+marketTable(d.near52High,"high",limit)+'</div><div style="margin-top:12px">'+marketTable(d.near52Low,"low",limit)+'</div>';
+    var rows=(d.stocks||[]).slice(0,Number(document.getElementById("marketLimit").value)||50);
+    var html='<div class="head"><h2>Matching Stocks</h2><span class="muted">'+rows.length+' stocks · '+new Date(d.fetchedAt).toLocaleTimeString("en-IN")+'</span></div>';
+    html+='<div class="card"><div class="tablewrap"><table class="table"><thead><tr><th>Stock</th><th>LTP</th><th>Change</th><th>Volume</th><th>20D Avg Vol</th><th>Volume Spike</th><th>Trend</th></tr></thead><tbody>';
+    if(!rows.length) html+='<tr><td colspan="7" class="muted">No stocks currently match all conditions.</td></tr>';
+    else html+=rows.map(function(x){
+      var spike=x.volumeSpike!=null?x.volumeSpike:(x.avgVolume20&&x.volume?x.volume/x.avgVolume20:null);
+      return '<tr><td><div class="asset">'+E(x.name||x.symbol)+'</div><div class="sub">'+E(x.symbol)+'</div></td><td>'+M(x.price)+'</td><td class="'+(x.change>=0?"green":"red")+'">'+(Number.isFinite(x.change)?P(x.change):"—")+'</td><td>'+N(x.volume)+'</td><td>'+N(x.avgVolume20)+'</td><td>'+(spike!=null?spike.toFixed(2)+'×':"—")+'</td><td><span class="pill">20DMA &gt; 50DMA &gt; 200DMA</span></td></tr>';
+    }).join("");
+    html+='</tbody></table></div></div>';
+    out.innerHTML=html;
   }catch(e){
-    out.innerHTML='<div class="card empty">Could not load market scanner. '+E(e.message||"NSE provider error")+'</div>';
+    out.innerHTML='<div class="card empty">Could not load technical scanner. '+E(e.message||"Provider error")+'</div>';
   }
 }
-
 
 function goals(){var v=T().v;return'<div class="head"><h2>Financial goals</h2><button class="btn primary" id="goal">Add goal</button></div><div class="grid three">'+(s.goals.length?s.goals.map(function(g){var p=Math.min(100,g.target?v/g.target*100:0);return'<div class="card"><div class="row"><b>'+E(g.name)+'</b><span class="muted">'+E(g.date)+'</span></div><div class="big">'+M(v)+'</div><div class="muted">of '+M(g.target)+'</div><div class="progress"><i style="width:'+p+'%"></i></div><div class="row muted" style="margin-top:7px"><span>'+p.toFixed(1)+'%</span><span>'+M(Math.max(0,g.target-v))+' remaining</span></div></div>'}).join(""):'<div class="card empty">Create a target such as a ₹10 lakh portfolio.</div>')+"</div>"}
 function imp(){return'<div class="card"><h2>CSV import</h2><p class="muted">Columns: date,type,name,symbol,exchange,action,qty,price,charges,notes</p><textarea id="csv" class="wide" rows="10"></textarea><div class="modalfoot"><button class="btn primary" id="import">Import</button></div></div>'}
