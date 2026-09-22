@@ -11,10 +11,11 @@ const DEMO=[
 
 let q=JSON.parse(localStorage.getItem("investtrack-quotes")||"{}");
 let saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(LEGACY_KEY)||"null");
-let s=saved||{version:STATE_VERSION,transactions:DEMO,goals:[],settings:{privacy:{pinHash:"",autoLockMinutes:30},backup:{enabled:true,lastBackupAt:0,savesSinceBackup:0},market:{refreshTtl:60000}},meta:{lastSavedAt:0,lastQuoteRefreshAt:0}};
+let s=saved||{version:STATE_VERSION,transactions:DEMO,sips:[],goals:[],settings:{privacy:{pinHash:"",autoLockMinutes:30},backup:{enabled:true,lastBackupAt:0,savesSinceBackup:0},market:{refreshTtl:60000}},meta:{lastSavedAt:0,lastQuoteRefreshAt:0}};
 function normalizeState(){
   s.version=STATE_VERSION;
   if(!Array.isArray(s.transactions))s.transactions=[];
+  if(!Array.isArray(s.sips))s.sips=[];
   if(!Array.isArray(s.goals))s.goals=[];
   s.settings=s.settings||{};
   s.settings.privacy=s.settings.privacy||{pinHash:"",autoLockMinutes:30};
@@ -274,6 +275,59 @@ function goalsPage(){
   return'<div class="head"><h2>Financial goals</h2><button class="btn primary" id="goal">Add goal</button></div><div class="grid three">'+(s.goals.length?s.goals.map(g=>{const current=g.linkPortfolio===false?Number(g.current)||0:pv,p=g.target?Math.min(100,current/g.target*100):0,months=g.date?Math.max(1,Math.ceil((new Date(g.date)-new Date())/(30.44*86400000))):1,need=Math.max(0,(Number(g.target)||0-current)/months);return'<div class="card"><div class="row"><b>'+esc(g.name)+'</b><span class="muted">'+esc(g.date||"No date")+'</span></div><div class="big">'+money(current)+'</div><div class="muted">of '+money(g.target)+'</div><div class="progress"><i style="width:'+p+'%"></i></div><div class="row muted" style="margin-top:7px"><span>'+p.toFixed(1)+'%</span><span>'+money(Math.max(0,g.target-current))+' remaining</span></div><div class="notice" style="margin-top:10px">Required monthly: <b>'+money(need)+'</b><br>Planned monthly: <b>'+money(g.monthlyContribution||0)+'</b></div></div>'}).join(""):'<div class="card empty">Create a goal such as a ₹10 lakh portfolio, car fund or emergency fund.</div>')+'</div>'
 }
 
+function sipMonthsBetween(startDate,endDate){
+  const a=new Date(startDate),b=new Date(endDate);
+  if(isNaN(a)||isNaN(b)||b<a)return 0;
+  return Math.max(0,(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth()+(b.getDate()>=a.getDate()?1:0));
+}
+function sipInstallments(plan){
+  return s.transactions.filter(t=>t.sipId===plan.id&&t.action==="SIP").sort((a,b)=>a.date.localeCompare(b.date));
+}
+function nextSipDate(plan){
+  const start=new Date(plan.startDate),today=new Date();
+  if(isNaN(start))return null;
+  let d=new Date(start);
+  while(d<=today){
+    if(plan.frequency==="MONTHLY")d.setMonth(d.getMonth()+1);
+    else if(plan.frequency==="QUARTERLY")d.setMonth(d.getMonth()+3);
+    else if(plan.frequency==="WEEKLY")d.setDate(d.getDate()+7);
+    else break;
+  }
+  return d.toISOString().slice(0,10);
+}
+function sipsPage(){
+  const active=s.sips.filter(x=>x.status!=="PAUSED"&&x.status!=="STOPPED");
+  const total=active.reduce((a,p)=>a+Number(p.amount||0),0);
+  return '<div class="head"><div><h2>Mutual Fund SIPs</h2><div class="muted">Track every SIP installment separately instead of entering one total investment.</div></div><button class="btn primary" id="addSip">＋ Add SIP</button></div>'+
+    '<div class="grid stats"><div class="card"><div class="label">Active SIPs</div><div class="big">'+active.length+'</div></div><div class="card"><div class="label">Planned monthly amount</div><div class="big">'+money(active.filter(x=>x.frequency==="MONTHLY").reduce((a,p)=>a+Number(p.amount||0),0))+'</div></div><div class="card"><div class="label">Total SIPs invested</div><div class="big">'+money(s.sips.reduce((a,p)=>a+sipInstallments(p).reduce((x,t)=>x+Number(t.qty||0)*Number(t.price||0)+totalCharges(t),0),0))+'</div></div><div class="card"><div class="label">Installments recorded</div><div class="big">'+s.sips.reduce((a,p)=>a+sipInstallments(p).length,0)+'</div></div></div>'+
+    (s.sips.length?'<div class="grid two" style="margin-top:12px">'+s.sips.map(p=>{
+      const ins=sipInstallments(p),invested=ins.reduce((a,t)=>a+Number(t.qty||0)*Number(t.price||0)+totalCharges(t),0),units=ins.reduce((a,t)=>a+Number(t.qty||0),0),current=units*price({symbol:p.symbol}),pnl=current-invested;
+      return '<div class="card"><div class="row"><div><h2 style="margin:0">'+esc(p.name)+'</h2><div class="sub">'+esc(p.symbol)+' · '+esc(p.frequency)+' · ₹'+num(p.amount)+'</div></div><span class="pill">'+esc(p.status||"ACTIVE")+'</span></div><div class="grid three" style="margin-top:12px"><div><div class="label">Invested</div><b>'+money(invested)+'</b></div><div><div class="label">Units</div><b>'+num(units)+'</b></div><div><div class="label">Current P/L</div><b class="'+(pnl>=0?"green":"red")+'">'+money(pnl)+'</b></div></div><div class="notice" style="margin-top:12px">Start: '+esc(p.startDate)+' · Next: '+esc(nextSipDate(p)||"—")+' · Installments: '+ins.length+'</div><div class="modalfoot"><button class="btn" data-sip-details="'+esc(p.id)+'">View installments</button><button class="btn primary" data-sip-add="'+esc(p.id)+'">＋ Record installment</button></div></div>'
+    }).join('')+'</div>':'<div class="card empty">No SIPs yet. Create a SIP to track each installment, units, NAV and total invested amount separately.</div>');
+}
+function openSip(){
+  openModal('<h2>Add Mutual Fund SIP</h2><form id="sipf"><div class="form"><div class="field full"><label>Mutual fund name</label><input class="input wide" name="name" required placeholder="e.g. Parag Parikh Flexi Cap Fund"></div><div class="field"><label>Scheme code / symbol</label><input class="input wide" name="symbol" required placeholder="AMFI scheme code"></div><div class="field"><label>Frequency</label><select class="select wide" name="frequency"><option>MONTHLY</option><option>QUARTERLY</option><option>WEEKLY</option></select></div><div class="field"><label>SIP amount</label><input class="input wide" type="number" min="1" step="any" name="amount" required></div><div class="field"><label>Start date</label><input class="input wide" type="date" name="startDate" required value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Status</label><select class="select wide" name="status"><option>ACTIVE</option><option>PAUSED</option><option>STOPPED</option></select></div><div class="field full"><label>Notes</label><input class="input wide" name="notes"></div></div><div class="notice" style="margin-top:10px">Each actual installment will be recorded separately with its date, NAV, units and charges. The SIP plan does not automatically assume that an installment was executed.</div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Create SIP</button></div></form>');
+  $("close").onclick=closeModal;
+  $("sipf").onsubmit=async e=>{
+    e.preventDefault();
+    const o=Object.fromEntries(new FormData(e.target));o.id="SIP-"+Date.now();o.amount=Number(o.amount);o.type="MUTUAL_FUND";o.exchange="AMFI";s.sips.push(o);save();closeModal();render();
+  }
+}
+function openSipInstallment(id){
+  const p=s.sips.find(x=>x.id===id);if(!p)return;
+  openModal('<h2>Record SIP installment</h2><div class="notice">'+esc(p.name)+' · '+esc(p.frequency)+' · Planned ₹'+num(p.amount)+'</div><form id="sipif" style="margin-top:12px"><div class="form"><div class="field"><label>Installment date</label><input class="input wide" type="date" name="date" required value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Investment amount</label><input class="input wide" type="number" step="any" name="amount" value="'+Number(p.amount||0)+'" required></div><div class="field"><label>NAV</label><input class="input wide" type="number" step="any" name="price" required placeholder="Actual NAV"></div><div class="field"><label>Units</label><input class="input wide" type="number" step="any" name="qty" required placeholder="Amount ÷ NAV"></div><div class="field"><label>Charges</label><input class="input wide" type="number" step="any" name="charges" value="0"></div><div class="field full"><label>Notes</label><input class="input wide" name="notes"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Record installment</button></div></form>');
+  $("close").onclick=closeModal;
+  const f=$("sipif");
+  f.elements.amount.oninput=()=>{const amount=Number(f.elements.amount.value)||0,nav=Number(f.elements.price.value)||0;if(nav>0)f.elements.qty.value=(amount/nav).toFixed(6)};
+  f.elements.price.oninput=f.elements.amount.oninput;
+  f.onsubmit=e=>{e.preventDefault();const o=Object.fromEntries(new FormData(f));o.id=String(Date.now());o.sipId=p.id;o.type="MUTUAL_FUND";o.name=p.name;o.symbol=p.symbol;o.exchange="AMFI";o.action="SIP";o.amount=Number(o.amount);o.price=Number(o.price);o.qty=Number(o.qty);o.charges=Number(o.charges)||0;o.brokerage=0;o.stt=0;o.gst=0;o.otherCharges=o.charges;s.transactions.push(o);save();closeModal();render()}
+}
+function sipDetails(id){
+  const p=s.sips.find(x=>x.id===id);if(!p)return;
+  const ins=sipInstallments(p),invested=ins.reduce((a,t)=>a+Number(t.qty)*Number(t.price)+totalCharges(t),0);
+  openModal('<h2>'+esc(p.name)+'</h2><div class="muted">'+esc(p.frequency)+' · Planned ₹'+num(p.amount)+' · Total invested '+money(invested)+'</div><div class="tablewrap" style="margin-top:12px"><table class="table"><thead><tr><th>Date</th><th>NAV</th><th>Units</th><th>Amount</th><th>Charges</th></tr></thead><tbody>'+(ins.length?ins.map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+money(t.price)+'</td><td>'+num(t.qty)+'</td><td>'+money(Number(t.qty)*Number(t.price))+'</td><td>'+money(totalCharges(t))+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No installments recorded.</td></tr>')+'</tbody></table></div><div class="modalfoot"><button class="btn" id="close">Close</button><button class="btn primary" data-sip-add="'+esc(p.id)+'">＋ Record installment</button></div>');
+  $("close").onclick=closeModal;
+}
 function importPage(){return'<div class="card"><h2>CSV import</h2><p class="muted">Columns: date,type,name,symbol,exchange,action,qty,price,charges,notes</p><textarea id="csv" class="wide" rows="10" placeholder="2026-09-01,STOCK,Infosys,INFY,NSE,BUY,5,1500,10,"></textarea><div class="modalfoot"><button class="btn primary" id="import">Import</button></div></div>'}
 
 function settingsPage(){
@@ -309,14 +363,17 @@ function openGoal(){
 }
 
 function render(){
-  const pages={dashboard:dashboard,holdings:holdingsPage,transactions:transactionsPage,realized:realizedPage,research:researchPage,news:newsPage,goals:goalsPage,import:importPage,settings:settingsPage};
-  const titles={dashboard:"Dashboard",holdings:"Holdings",transactions:"Transactions",realized:"Realised P/L",research:"Stock Research",news:"News & Events",goals:"Goals",import:"CSV Import",settings:"Settings / Data"};
+  const pages={dashboard:dashboard,holdings:holdingsPage,sips:sipsPage,transactions:transactionsPage,realized:realizedPage,research:researchPage,news:newsPage,goals:goalsPage,import:importPage,settings:settingsPage};
+  const titles={dashboard:"Dashboard",holdings:"Holdings",sips:"Mutual Fund SIPs",transactions:"Transactions",realized:"Realised P/L",research:"Stock Research",news:"News & Events",goals:"Goals",import:"CSV Import",settings:"Settings / Data"};
   $("title").textContent=titles[page];document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));$("view").innerHTML=pages[page]();
   if($("autolock"))$("autolock").value=String(s.settings.privacy.autoLockMinutes||30);
 }
 document.addEventListener("click",e=>{
   const nav=e.target.closest("[data-page]");if(nav){page=nav.dataset.page;render();return}
   if(e.target.id==="privacyEye"){privacyHidden=!privacyHidden;localStorage.setItem("investtrack-privacy-hidden",privacyHidden?"1":"0");render();return}
+  if(e.target.id==="addSip"){openSip();return}
+  if(e.target.dataset.sipAdd){openSipInstallment(e.target.dataset.sipAdd);return}
+  if(e.target.dataset.sipDetails){sipDetails(e.target.dataset.sipDetails);return}
   if(e.target.id==="add"||e.target.id==="add2")openTx();
   if(e.target.dataset.edit)openTx(e.target.dataset.edit);
   if(e.target.id==="goal")openGoal();
@@ -331,7 +388,7 @@ document.addEventListener("click",e=>{
   if(e.target.id==="export")downloadBackup();
   if(e.target.dataset.togglePin){const input=$(e.target.dataset.togglePin);if(input){const show=input.type==="password";input.type=show?"text":"password";e.target.textContent=show?"◉":"◉";e.target.setAttribute("aria-label",show?"Hide PIN":"Show PIN")}}
   if(e.target.id==="setpin"){const a=$("pin1").value,b=$("pin2").value;if(!/^\d{4,8}$/.test(a)||a!==b)return alert("PIN must be 4–8 digits and both fields must match.");hashPin(a).then(h=>{s.settings.privacy.pinHash=h;save();alert("PIN saved.")})}
-  if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={version:STATE_VERSION,transactions:JSON.parse(JSON.stringify(DEMO)),goals:[],settings:{privacy:{pinHash:"",autoLockMinutes:30},backup:{enabled:true,lastBackupAt:0,savesSinceBackup:0},market:{refreshTtl:60000}},meta:{lastSavedAt:0,lastQuoteRefreshAt:0}};save();render()}
+  if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={version:STATE_VERSION,transactions:JSON.parse(JSON.stringify(DEMO)),sips:[],goals:[],settings:{privacy:{pinHash:"",autoLockMinutes:30},backup:{enabled:true,lastBackupAt:0,savesSinceBackup:0},market:{refreshTtl:60000}},meta:{lastSavedAt:0,lastQuoteRefreshAt:0}};save();render()}
   if(e.target.id==="import"){const lines=($("csv").value||"").trim().split(/\\r?\\n/).filter(Boolean);lines.forEach((line,i)=>{const c=line.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+i),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,brokerage:0,stt:0,gst:0,otherCharges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported.")}
   if(e.target.id==="refresh")refreshQuotes();
   if(e.target.id==="del"||e.target.dataset.del){if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(x=>x.id!==e.target.dataset.del);save();render()}}
