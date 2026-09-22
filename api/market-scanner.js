@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     return {csrf: m?.[1] || "", cookie: getCookie(r)};
   }
 
-  async function scan(session, clause) {
+  async function scan(session) {
     const h = {
       ...headers,
       "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -33,6 +33,8 @@ export default async function handler(req, res) {
     };
     if (session.cookie) h.Cookie = session.cookie;
     if (session.csrf) h["X-CSRF-TOKEN"] = session.csrf;
+
+    const clause = "( {cash} ( latest volume > latest sma( volume , 20 ) * 2 and latest sma( close , 20 ) > latest sma( close , 50 ) and latest sma( close , 50 ) > latest sma( close , 200 ) and latest close > latest sma( close , 20 ) and latest close >= 10 ) )";
 
     const r = await fetch("https://chartink.com/screener/process", {
       method: "POST",
@@ -43,53 +45,39 @@ export default async function handler(req, res) {
     if (!r.ok) throw new Error("Chartink scan HTTP " + r.status);
     let d;
     try { d = JSON.parse(text); } catch (_) { throw new Error("Chartink returned non-JSON data"); }
-    if (!Array.isArray(d.data)) throw new Error(d.message || "No scanner data");
+    if (!Array.isArray(d.data)) throw new Error(d.message || "Chartink returned no data");
+
     return d.data.map(x => ({
       symbol: x.nsecode || x.symbol || "",
       name: x.name || x.nsecode || x.symbol || "",
       price: num(x.close),
       change: num(x.per_chg),
       volume: num(x.volume),
+      avgVolume20: num(x.sma_volume_20 || x.sma_volume || x.avg_volume),
       high52: num(x.high52),
-      low52: num(x.low52)
+      low52: num(x.low52),
+      volumeSpike: num(x.volume_spike || x.volume_ratio)
     })).filter(x => x.symbol);
   }
 
   try {
     const session = await getSession();
-
-    const scans = {
-      volume: "( {cash} ( latest volume > latest sma( volume , 20 ) * 2 and latest close >= 10 ) )",
-      high: "( {cash} ( latest close >= latest max( 252 , latest high ) * 0.97 and latest close >= 10 ) )",
-      low: "( {cash} ( latest close <= latest min( 252 , latest low ) * 1.03 and latest close >= 10 ) )",
-      breakout: "( {cash} ( latest close > latest max( 20 , latest high ) and latest volume > latest sma( volume , 20 ) * 1.5 and latest close >= 10 ) )",
-      trend: "( {cash} ( latest close > latest sma( latest close , 20 ) and latest sma( latest close , 20 ) > latest sma( latest close , 50 ) and latest sma( latest close , 50 ) > latest sma( latest close , 200 ) and latest close >= 10 ) )"
-    };
-
-    const pairs = await Promise.all(Object.entries(scans).map(async ([key, clause]) => {
-      try { return [key, await scan(session, clause)]; }
-      catch (_) { return [key, []]; }
-    }));
-    const d = Object.fromEntries(pairs);
-
-    if (!Object.values(d).some(x => x.length)) {
-      throw new Error("Chartink did not return scanner results.");
-    }
+    const stocks = await scan(session);
 
     return res.status(200).json({
       source: "Chartink scanner API",
       dataMode: "latest-available-daily-data",
       fetchedAt: new Date().toISOString(),
-      volumeSurge: d.volume.slice(0,100),
-      near52High: d.high.slice(0,100),
-      near52Low: d.low.slice(0,100),
-      breakout: d.breakout.slice(0,100),
-      strongTrend: d.trend.slice(0,100),
-      active: d.volume.slice(0,100)
+      criteria: {
+        volume: "Volume > 2x 20-day average volume",
+        trend: "20 DMA > 50 DMA > 200 DMA",
+        price: "Close > 20 DMA"
+      },
+      stocks: stocks.slice(0, 200)
     });
   } catch (e) {
     return res.status(502).json({
-      error: "Unable to load market scanner",
+      error: "Unable to load technical scanner",
       detail: e?.message || "Chartink provider error"
     });
   }
