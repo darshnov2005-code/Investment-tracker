@@ -22,7 +22,29 @@ async function fetchQuote(symbol,exchange){var r=await fetch("/api/quote?symbol=
 function H(){var m={};s.transactions.forEach(function(t){var k=t.type+"|"+t.symbol;if(!m[k])m[k]={type:t.type,name:t.name,symbol:t.symbol,exchange:t.exchange,qty:0,cost:0};var h=m[k],n=Number(t.qty)||0,p=Number(t.price)||0,c=Number(t.charges)||0;if(["BUY","SIP","BONUS","RIGHTS"].indexOf(t.action)>=0){h.qty+=n;h.cost+=n*p+c}if(["SELL","REDEMPTION"].indexOf(t.action)>=0){var a=h.qty?h.cost/h.qty:p;h.qty-=n;h.cost-=n*a}});return Object.keys(m).map(function(k){var h=m[k];if(h.qty<=0)return null;h.avg=h.cost/h.qty;h.current=price(h);h.value=h.qty*h.current;h.pnl=h.value-h.cost;return h}).filter(Boolean)}
 function R(){var lots={},out=[];s.transactions.slice().sort(function(a,b){return a.date.localeCompare(b.date)}).forEach(function(t){if(["BUY","SIP","BONUS","RIGHTS"].indexOf(t.action)>=0)(lots[t.symbol]||(lots[t.symbol]=[])).push({qty:Number(t.qty),price:Number(t.price)});if(["SELL","REDEMPTION"].indexOf(t.action)>=0){var left=Number(t.qty),cost=0,z=lots[t.symbol]||[];while(left>0&&z.length){var l=z[0],take=Math.min(left,l.qty);cost+=take*l.price;l.qty-=take;left-=take;if(l.qty<=0)z.shift()}out.push({date:t.date,name:t.name,symbol:t.symbol,qty:t.qty,cost:cost,proceeds:Number(t.qty)*Number(t.price)-(Number(t.charges)||0),pnl:Number(t.qty)*Number(t.price)-(Number(t.charges)||0)-cost})}});return out}
 function T(){var h=H(),c=h.reduce(function(a,x){return a+x.cost},0),v=h.reduce(function(a,x){return a+x.value},0),r=R().reduce(function(a,x){return a+x.pnl},0);return{h:h,c:c,v:v,p:v-c,ret:c?(v-c)/c*100:0,r:r}}
-function table(h){if(!h.length)return'<div class="card empty">No active holdings. Add your first investment.</div>';return'<div class="tablewrap"><table class="table"><thead><tr><th>Asset</th><th>Qty</th><th>Avg</th><th>Current</th><th>Value</th><th>Unrealised P/L</th><th></th></tr></thead><tbody>'+h.map(function(x){return'<tr><td><div class="asset">'+E(x.name)+'</div><div class="sub">'+E(x.symbol)+" · "+E(x.exchange)+'</div></td><td>'+N(x.qty)+'</td><td>'+M(x.avg)+'</td><td>'+M(x.current)+'</td><td>'+M(x.value)+'</td><td class="'+(x.pnl>=0?"green":"red")+'">'+M(x.pnl)+'<div class="sub">'+P(x.cost?x.pnl/x.cost*100:0)+'</div></td><td><button class="btn" data-edit="'+E(x.symbol)+'">Edit</button></td></tr>'}).join("")+"</tbody></table></div>"}
+function table(h){
+  if(!h.length)return'<div class="card empty">No active holdings. Add your first investment.</div>';
+  return'<div class="tablewrap"><table class="table"><thead><tr><th>Asset</th><th>Qty</th><th>Avg</th><th>Current</th><th>Value</th><th>Unrealised P/L</th><th>Actions</th></tr></thead><tbody>'+
+  h.map(function(x){
+    return'<tr><td><div class="asset">'+E(x.name)+'</div><div class="sub">'+E(x.symbol)+" · "+E(x.exchange)+'</div></td><td>'+N(x.qty)+'</td><td>'+M(x.avg)+'</td><td>'+M(x.current)+'</td><td>'+M(x.value)+'</td><td class="'+(x.pnl>=0?"green":"red")+'">'+M(x.pnl)+'<div class="sub">'+P(x.cost?x.pnl/x.cost*100:0)+'</div></td><td><button class="btn" data-buy="'+E(x.symbol)+'">Buy</button> <button class="btn" data-sell="'+E(x.symbol)+'">Sell</button> <button class="btn" data-edit="'+E(x.symbol)+'">Edit</button></td></tr>'
+  }).join("")+
+  "</tbody></table></div>";
+}
+
+function holdingFor(symbol){
+  return H().find(function(x){return x.symbol===symbol});
+}
+
+function openBuy(symbol){
+  openTx(symbol,null,"BUY");
+}
+
+function openSell(symbol){
+  var hld=holdingFor(symbol);
+  if(!hld||hld.qty<=0){alert("You do not have any units/shares available to sell.");return;}
+  openTx(symbol,null,"SELL");
+}
+
 function alloc(h,total){if(!total)return'<div class="empty">Add investments to see allocation.</div>';return'<div class="allocation">'+h.map(function(x,i){return'<i style="width:'+(x.value/total*100)+'%;background:hsl('+(145+i*40)+' 45% 55%)"></i>'}).join("")+'</div>'+h.map(function(x){return'<div class="row muted" style="margin-top:9px"><span>'+E(x.name)+'</span><b>'+((x.value/total)*100).toFixed(1)+'%</b></div>'}).join("")}
 function dash(){var t=T(),b=[.45,.5,.47,.58,.63,.68,.65,.76,.82,.93];return'<div class="grid stats"><div class="card"><div class="label">Portfolio value</div><div class="big">'+M(t.v)+'</div><div class="muted">'+t.h.length+' active holdings</div></div><div class="card"><div class="label">Invested cost</div><div class="big">'+M(t.c)+'</div><div class="muted">Net purchase cost</div></div><div class="card"><div class="label">Overall P/L</div><div class="big '+(t.p>=0?"green":"red")+'">'+M(t.p)+'</div><div class="muted '+(t.p>=0?"green":"red")+'">'+P(t.ret)+'</div></div><div class="card"><div class="label">Realised P/L</div><div class="big '+(t.r>=0?"green":"red")+'">'+M(t.r)+'</div><div class="muted">FIFO cost basis</div></div></div><div class="grid two"><div class="card"><div class="head" style="margin:0"><h2>Portfolio trend</h2><span class="muted">Ledger view</span></div><div class="chart">'+b.map(function(x){return'<i class="bar" style="height:'+(x*90)+'%"></i>'}).join("")+'</div></div><div class="card"><div class="head" style="margin:0 0 13px"><h2>Allocation</h2></div>'+alloc(t.h,t.v)+'</div></div><div class="head"><h2>Top holdings</h2><button class="btn" data-page="holdings">View all</button></div>'+table(t.h.sort(function(a,b){return b.value-a.value}).slice(0,8))}
 function hold(){return'<div class="search"><input class="input" id="search" placeholder="Search holdings..."><select class="select" id="filter"><option value="">All types</option><option>STOCK</option><option>MUTUAL_FUND</option><option>ETF</option><option>FD</option><option>BOND</option><option>SGB</option><option>PPF</option><option>NPS</option><option>GOLD</option><option>CASH</option><option>OTHER</option></select></div><div id="hm">'+table(H())+"</div>"}
@@ -98,12 +120,25 @@ async function setupMFSelectors(f){
   }
 }
 
-function openTx(symbol){
-  var old=symbol?s.transactions.find(function(x){return x.symbol===symbol}):null;
+function openTx(symbol,unused,forcedAction){
+  var old=symbol?s.transactions.find(function(x){return x.symbol===symbol}):null; var existing=symbol?holdingFor(symbol):null; var defaultAction=forcedAction||"BUY";
   document.getElementById("modal").innerHTML='<h2>'+(old?"Edit transaction":"Add investment")+'</h2><form id="f"><div class="form"><div class="field"><label>Type</label><select class="select wide" name="type"><option>STOCK</option><option>MUTUAL_FUND</option><option>ETF</option><option>FD</option><option>BOND</option><option>SGB</option><option>PPF</option><option>NPS</option><option>GOLD</option><option>CASH</option><option>OTHER</option></select></div><div class="field"><label>Action</label><select class="select wide" name="action"><option>BUY</option><option>SELL</option><option>SIP</option><option>DIVIDEND</option><option>BONUS</option><option>SPLIT</option><option>RIGHTS</option><option>REDEMPTION</option></select></div><div class="field full"><label>Name</label><input class="input wide" name="name" required></div><div class="field full hidden" id="mfbox"><label>Mutual fund selection — AMFI</label><div class="form" style="margin:0"><div class="field"><label>AMC</label><select class="select wide" id="mfamc"><option>Select AMC...</option></select></div><div class="field"><label>Scheme</label><select class="select wide" id="mfscheme" disabled><option>Select AMC first...</option></select></div><div class="field"><label>Plan</label><select class="select wide" id="mfplan" disabled><option>Select scheme first...</option></select></div><div class="field"><label>Option</label><select class="select wide" id="mfoption" disabled><option>Select plan first...</option></select></div></div><div class="notice" id="mfmeta" style="margin-top:10px">Select AMC → Scheme → Plan → Option. The AMFI code, ISIN and latest NAV will be filled automatically.</div></div><div class="field"><label>Symbol / AMFI scheme code</label><input class="input wide" name="symbol" required></div><div class="field"><label>Exchange / source</label><select class="select wide" name="exchange"><option>NSE</option><option>BSE</option><option>AMFI</option><option>OTHER</option></select></div><div class="field"><label>Date</label><input class="input wide" type="date" name="date" required value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Quantity / units</label><input class="input wide" type="number" step="any" name="qty" required></div><div class="field"><label>Price / NAV</label><input class="input wide" type="number" step="any" name="price" required></div><div class="field"><label>Charges</label><input class="input wide" type="number" step="any" name="charges" value="0"></div><div class="field full"><label>Notes</label><input class="input wide" name="notes"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Save</button></div></form>';
   var f=document.getElementById("f"),type=f.elements.type,box=document.getElementById("mfbox"),ex=f.elements.exchange;
   function showMF(){box.classList.remove("hidden");ex.value="AMFI";setupMFSelectors(f)}
   type.onchange=function(){if(type.value==="MUTUAL_FUND")showMF();else box.classList.add("hidden")};
+  if(forcedAction&&!old)f.elements.action.value=defaultAction;
+  if(existing&&!old&&forcedAction==="SELL"){
+    f.elements.name.value=existing.name;
+    f.elements.symbol.value=existing.symbol;
+    f.elements.exchange.value=existing.exchange;
+    f.elements.price.value=existing.current;
+    f.elements.qty.max=existing.qty;
+    f.elements.qty.placeholder="Max "+N(existing.qty);
+    f.elements.name.readOnly=true;
+    f.elements.symbol.readOnly=true;
+    f.elements.exchange.disabled=true;
+    if(existing.type==="MUTUAL_FUND"){f.elements.type.value="MUTUAL_FUND";showMF();}
+  }
   if(old){
     Object.keys(old).forEach(function(k){if(f.elements[k])f.elements[k].value=old[k]});
     if(old.type==="MUTUAL_FUND")showMF();
@@ -114,14 +149,20 @@ function openTx(symbol){
     e.preventDefault();
     var o=Object.fromEntries(new FormData(f));
     o.id=old?old.id:String(Date.now());o.qty=Number(o.qty);o.price=Number(o.price);o.charges=Number(o.charges);
-    if(o.exchange==="AMFI"&&o.symbol){try{await fetchQuote(o.symbol,"AMFI")}catch(err){}}
+    if(o.action==="SELL"||o.action==="REDEMPTION"){
+      var current=holdingFor(o.symbol);
+      var sellQty=Number(o.qty)||0;
+      if(!current||sellQty<=0){alert("No quantity available to sell.");return;}
+      if(sellQty>current.qty+1e-9){alert("You cannot sell "+N(sellQty)+" units. Your current holding is only "+N(current.qty)+" units.");return;}
+    }
+    if(o.exchange==="AMFI"&&o.symbol&&o.action!=="SELL"&&o.action!=="REDEMPTION"){try{await fetchQuote(o.symbol,"AMFI")}catch(err){}}
     if(old)s.transactions=s.transactions.map(function(x){return x.id===old.id?o:x});else s.transactions.push(o);
     save();close();render();
   };
 }
 
 function openGoal(){document.getElementById("modal").innerHTML='<h2>Add financial goal</h2><form id="gf"><div class="form"><div class="field full"><label>Goal name</label><input class="input wide" name="name" required placeholder="₹10 lakh portfolio"></div><div class="field"><label>Target amount</label><input class="input wide" type="number" name="target" required></div><div class="field"><label>Target date</label><input class="input wide" type="date" name="date"></div></div><div class="modalfoot"><button type="button" class="btn" id="close">Cancel</button><button class="btn primary">Create</button></div></form>';document.getElementById("mb").classList.remove("hidden");document.getElementById("close").onclick=close;document.getElementById("gf").onsubmit=function(e){e.preventDefault();var o=Object.fromEntries(new FormData(e.target));o.id=String(Date.now());o.target=Number(o.target);s.goals.push(o);save();close();render()}}
-document.addEventListener("click",function(e){var p=e.target.closest("[data-page]");if(p){page=p.dataset.page;render();return}if(e.target.id==="add"||e.target.id==="add2")openTx();if(e.target.dataset.edit)openTx(e.target.dataset.edit);if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(function(x){return x.id!==e.target.dataset.del});save();render()}if(e.target.id==="goal")openGoal();if(e.target.id==="import"){var lines=document.getElementById("csv").value.trim().split(/\r?\n/).filter(Boolean);lines.forEach(function(x){var c=x.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+Math.random()),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported")}if(e.target.id==="export"){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup.json";a.click()}if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={transactions:demo,goals:[]};save();render()}});
+document.addEventListener("click",function(e){var p=e.target.closest("[data-page]");if(p){page=p.dataset.page;render();return}if(e.target.id==="add"||e.target.id==="add2")openTx();if(e.target.dataset.edit)openTx(e.target.dataset.edit);if(e.target.dataset.buy)openBuy(e.target.dataset.buy);if(e.target.dataset.sell)openSell(e.target.dataset.sell);if(e.target.dataset.del&&confirm("Delete transaction?")){s.transactions=s.transactions.filter(function(x){return x.id!==e.target.dataset.del});save();render()}if(e.target.id==="goal")openGoal();if(e.target.id==="import"){var lines=document.getElementById("csv").value.trim().split(/\r?\n/).filter(Boolean);lines.forEach(function(x){var c=x.split(",");if(c.length>=8)s.transactions.push({id:String(Date.now()+Math.random()),date:c[0],type:c[1],name:c[2],symbol:c[3],exchange:c[4],action:c[5],qty:Number(c[6]),price:Number(c[7]),charges:Number(c[8])||0,notes:c[9]||""})});save();render();alert(lines.length+" row(s) imported")}if(e.target.id==="export"){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:"application/json"}));a.download="investment-tracker-backup.json";a.click()}if(e.target.id==="reset"&&confirm("Reset demo data?")){localStorage.removeItem(KEY);s={transactions:demo,goals:[]};save();render()}});
 document.addEventListener("input",function(e){if(e.target.id==="search"||e.target.id==="filter"){var qv=(document.getElementById("search").value||"").toLowerCase(),fv=document.getElementById("filter").value;document.getElementById("hm").innerHTML=table(H().filter(function(x){return(!fv||x.type===fv)&&(!qv||x.name.toLowerCase().indexOf(qv)>=0||x.symbol.toLowerCase().indexOf(qv)>=0)}))}});
 document.getElementById("refresh").onclick=async function(){var hs=H(),ok=0;for(var i=0;i<hs.length;i++){try{await fetchQuote(hs[i].symbol,hs[i].exchange);ok++}catch(e){}}render();alert(ok+" quote(s) refreshed.")};
 document.getElementById("mb").onclick=function(e){if(e.target===document.getElementById("mb"))close()};render();
