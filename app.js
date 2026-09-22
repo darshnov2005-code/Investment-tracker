@@ -166,11 +166,25 @@ function holdings(){
 function realizedLots(){
   return buildInventory().realized;
 }
-function xnpv(rate,cfs){const d0=cfs[0][0];return cfs.reduce((s,x)=>s+x[1]/Math.pow(1+rate,(x[0]-d0)/365),0)}
+function xnpv(rate,cfs){
+  if(rate<=-1)return NaN;
+  const d0=cfs[0][0];
+  return cfs.reduce((sum,x)=>sum+x[1]/Math.pow(1+rate,(x[0]-d0)/365),0)
+}
 function xirr(cfs){
-  if(cfs.length<2)return null;let rate=.1;
-  for(let i=0;i<80;i++){const f=xnpv(rate,cfs),e=1e-5,df=(xnpv(rate+e,cfs)-xnpv(rate-e,cfs))/(2*e);if(!isFinite(df)||Math.abs(df)<1e-12)break;let next=rate-f/df;if(next<=-.9999||!isFinite(next))next=(rate-.99)/2;if(Math.abs(next-rate)<1e-8)return next;rate=next}
-  return isFinite(rate)?rate:null
+  if(cfs.length<2||!cfs.some(x=>x[1]<0)||!cfs.some(x=>x[1]>0))return null;
+  cfs=cfs.slice().sort((a,b)=>a[0]-b[0]);
+  let lo=-0.9999,hi=1;
+  let flo=xnpv(lo,cfs),fhi=xnpv(hi,cfs);
+  for(let i=0;i<60&&isFinite(fhi)&&flo*fhi>0;i++){hi=hi*2+1;fhi=xnpv(hi,cfs)}
+  if(!isFinite(flo)||!isFinite(fhi)||flo*fhi>0)return null;
+  for(let i=0;i<120;i++){
+    const mid=(lo+hi)/2,fmid=xnpv(mid,cfs);
+    if(!isFinite(fmid))return null;
+    if(Math.abs(fmid)<1e-8)return mid;
+    if(flo*fmid<=0){hi=mid;fhi=fmid}else{lo=mid;flo=fmid}
+  }
+  return (lo+hi)/2;
 }
 function totals(){
   const h=holdings(),cost=h.reduce((a,x)=>a+x.cost,0),value=h.reduce((a,x)=>a+x.value,0),r=realizedLots().reduce((a,x)=>a+x.pnl,0),cfs=[];
