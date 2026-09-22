@@ -1,130 +1,96 @@
 export default async function handler(req, res) {
   const headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-    "Accept": "text/html,application/json,text/plain,*/*",
-    "Accept-Language": "en-IN,en;q=0.9"
+    "Accept": "text/html,application/xhtml+xml,application/json,text/plain,*/*",
+    "Accept-Language": "en-IN,en;q=0.9",
+    "Referer": "https://chartink.com/screener"
   };
 
-  function cleanText(s) {
-    return String(s || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+  const num = v => {
+    const x = Number(String(v ?? "").replace(/,/g, "").replace(/%/g, "").trim());
+    return Number.isFinite(x) ? x : null;
+  };
+
+  const getCookie = r => {
+    const raw = r.headers.get("set-cookie") || "";
+    return raw.split(/,(?=[A-Z0-9_]+=)/).map(x => x.split(";")[0].trim()).filter(Boolean).join("; ");
+  };
+
+  async function getSession() {
+    const r = await fetch("https://chartink.com/screener", {headers});
+    if (!r.ok) throw new Error("Chartink session HTTP " + r.status);
+    const html = await r.text();
+    const m = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i);
+    return {csrf: m?.[1] || "", cookie: getCookie(r)};
   }
 
-  function num(s) {
-    const x = String(s || "").replace(/,/g, "").replace(/%/g, "").trim();
-    const n = Number(x);
-    return Number.isFinite(n) ? n : null;
-  }
+  async function scan(session, clause) {
+    const h = {
+      ...headers,
+      "Accept": "application/json, text/javascript, */*; q=0.01",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-Requested-With": "XMLHttpRequest"
+    };
+    if (session.cookie) h.Cookie = session.cookie;
+    if (session.csrf) h["X-CSRF-TOKEN"] = session.csrf;
 
-  // Chartink's public screener pages continue to expose the latest completed
-  // scan results after market close. We use public scan pages rather than
-  // requiring the user to search for a symbol.
-  async function chartink(slug) {
-    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 5000); let r; try { r = await fetch("https://chartink.com/screener/" + encodeURIComponent(slug), {headers, signal: controller.signal}); } finally { clearTimeout(timer); }
-    if (!r.ok) throw new Error("Chartink HTTP " + r.status);
-    return await r.text();
-  }
-
-  function parseStocks(html) {
-    const out = [];
-    // Chartink renders matched stocks in table rows. This parser is deliberately
-    // tolerant because the public page markup changes occasionally.
-    const rows = html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
-    for (const row of rows) {
-      const cells = (row.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || []).map(cleanText);
-      if (cells.length < 3) continue;
-      const symbol = cells.find(x => /^[A-Z0-9&._-]{2,30}$/.test(x) && !/^Sr\.?$/i.test(x));
-      if (!symbol || /^(SYMBOL|STOCK|CLOSE|VOLUME|MARKETCAP)$/i.test(symbol)) continue;
-      const nums = cells.map(num).filter(x => x !== null);
-      const price = nums.length ? nums[0] : null;
-      const change = cells.map(x => num(x)).find(x => x !== null && Math.abs(x) <= 100);
-      const volume = nums.length > 1 ? nums[nums.length - 1] : null;
-      const name = cells.find(x => x.length > 2 && !/^[A-Z0-9&._-]+$/.test(x) && !/^[-+]?\d/.test(x)) || symbol;
-      out.push({symbol, name, price, change, volume});
-    }
-    const seen = new Set();
-    return out.filter(x => {
-      if (seen.has(x.symbol)) return false;
-      seen.add(x.symbol);
-      return true;
-    }).slice(0, 100);
+    const r = await fetch("https://chartink.com/screener/process", {
+      method: "POST",
+      headers: h,
+      body: new URLSearchParams({scan_clause: clause})
+    });
+    const text = await r.text();
+    if (!r.ok) throw new Error("Chartink scan HTTP " + r.status);
+    let d;
+    try { d = JSON.parse(text); } catch (_) { throw new Error("Chartink returned non-JSON data"); }
+    if (!Array.isArray(d.data)) throw new Error(d.message || "No scanner data");
+    return d.data.map(x => ({
+      symbol: x.nsecode || x.symbol || "",
+      name: x.name || x.nsecode || x.symbol || "",
+      price: num(x.close),
+      change: num(x.per_chg),
+      volume: num(x.volume),
+      high52: num(x.high52),
+      low52: num(x.low52)
+    })).filter(x => x.symbol);
   }
 
   try {
-    // Public Chartink scans used as market-wide technical screens. These are
-    // snapshots of the latest available completed candles, so they remain
-    // useful after market close.
-    const scans = [
-      ["volume", "volume-surge-5"],
-      ["high", "copy-52-week-high-stocks-volume-breakout-check"],
-      ["low", "52-week-high-low-indicator-low"]
-    ];
+    const session = await getSession();
 
-    const results = {};
-    await Promise.all(scans.map(async ([key, slug]) => {
-      try {
-        results[key] = parseStocks(await chartink(slug));
-      } catch (_) {
-        results[key] = [];
-      }
+    const scans = {
+      volume: "( {cash} ( latest volume > latest sma( volume , 20 ) * 2 and latest close >= 10 ) )",
+      high: "( {cash} ( latest close >= latest max( 252 , latest high ) * 0.97 and latest close >= 10 ) )",
+      low: "( {cash} ( latest close <= latest min( 252 , latest low ) * 1.03 and latest close >= 10 ) )",
+      breakout: "( {cash} ( latest close > latest max( 20 , latest high ) and latest volume > latest sma( volume , 20 ) * 1.5 and latest close >= 10 ) )",
+      trend: "( {cash} ( latest close > latest sma( latest close , 20 ) and latest sma( latest close , 20 ) > latest sma( latest close , 50 ) and latest sma( latest close , 50 ) > latest sma( latest close , 200 ) and latest close >= 10 ) )"
+    };
+
+    const pairs = await Promise.all(Object.entries(scans).map(async ([key, clause]) => {
+      try { return [key, await scan(session, clause)]; }
+      catch (_) { return [key, []]; }
     }));
+    const d = Object.fromEntries(pairs);
 
-    const hasChartink = Object.values(results).some(x => x.length);
-    if (hasChartink) {
-      return res.status(200).json({
-        source: "Chartink public market scans",
-        fetchedAt: new Date().toISOString(),
-        dataMode: "latest-available",
-        volumeSurge: results.volume,
-        near52High: results.high,
-        near52Low: results.low,
-        active: results.volume
-      });
+    if (!Object.values(d).some(x => x.length)) {
+      throw new Error("Chartink did not return scanner results.");
     }
 
-    // Fallback to the existing NSE scanner so the app still works if Chartink
-    // changes its public page structure or is temporarily unavailable.
-    const nseHeaders = {...headers, "Accept":"application/json,text/plain,*/*", "Referer":"https://www.nseindia.com/market-data/live-equity-market"};
-    async function nse(path) {
-      const r = await fetch("https://www.nseindia.com" + path, {headers:nseHeaders});
-      if (!r.ok) throw new Error("NSE HTTP " + r.status);
-      return r.json();
-    }
-    function flatten(d) {
-      const out = [];
-      if (!d || typeof d !== "object") return out;
-      if (Array.isArray(d.data)) out.push(...d.data);
-      for (const v of Object.values(d)) if (v && typeof v === "object" && Array.isArray(v.data)) out.push(...v.data);
-      return out;
-    }
-    function normalize(x) {
-      const symbol=x.symbol||x.Symbol||x.symbolCode;
-      return {
-        symbol,
-        name:x.meta?.companyName||x.companyName||x.company||symbol,
-        price:Number(x.ltp??x.lastPrice??x.LTP??x.closePrice)||null,
-        volume:Number(x.totalTradedVolume??x.volume??x.VOLUME)||null,
-        high52:Number(x.yearHigh??x["52WeekHigh"]??x.week52High??x.high52)||null,
-        low52:Number(x.yearLow??x["52WeekLow"]??x.week52Low??x.low52)||null,
-        change:Number(x.pChange??x.percentChange??x.changePercent)||null
-      };
-    }
-    const [volume,high,low,gainers]=await Promise.all([
-      nse("/api/live-analysis-volume-gainers"),
-      nse("/api/data-52weekhighstock"),
-      nse("/api/data-52weeklowstock"),
-      nse("/api/live-analysis-variations?index=gainers")
-    ]);
-    const merge=a=>{const m=new Map();a.flatMap(flatten).map(normalize).filter(x=>x.symbol).forEach(x=>m.set(x.symbol,{...(m.get(x.symbol)||{}),...x}));return [...m.values()]};
     return res.status(200).json({
-      source:"NSE market scanners (fallback)",
-      fetchedAt:new Date().toISOString(),
-      dataMode:"live-session",
-      volumeSurge:merge([volume]).slice(0,100),
-      near52High:merge([high]).slice(0,100),
-      near52Low:merge([low]).slice(0,100),
-      active:merge([gainers,volume]).slice(0,100)
+      source: "Chartink scanner API",
+      dataMode: "latest-available-daily-data",
+      fetchedAt: new Date().toISOString(),
+      volumeSurge: d.volume.slice(0,100),
+      near52High: d.high.slice(0,100),
+      near52Low: d.low.slice(0,100),
+      breakout: d.breakout.slice(0,100),
+      strongTrend: d.trend.slice(0,100),
+      active: d.volume.slice(0,100)
     });
   } catch (e) {
-    return res.status(502).json({error:"Unable to load market scanner",detail:e?.message||"Provider error"});
+    return res.status(502).json({
+      error: "Unable to load market scanner",
+      detail: e?.message || "Chartink provider error"
+    });
   }
 }
