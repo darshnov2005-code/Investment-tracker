@@ -93,45 +93,75 @@ async function fetchQuote(symbol,exchange,force=false){
   }finally{clearTimeout(timer)}
 }
 
-function holdings(){
-  const m={};
+function buildInventory(){
+  const lots={},realized=[];
   const tx=s.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
   tx.forEach(t=>{
-    const k=t.type+"|"+t.symbol;
-    if(!m[k])m[k]={type:t.type,name:t.name,symbol:t.symbol,exchange:t.exchange,qty:0,cost:0};
-    const h=m[k],n=Number(t.qty)||0,gross=n*(Number(t.price)||0),c=totalCharges(t);
-    if(["BUY","SIP","BONUS","RIGHTS"].includes(t.action)){
-      h.qty+=n;
-      h.cost+=gross+c;
-    }else if(["SELL","REDEMPTION"].includes(t.action)){
-      // Reduce only the sold quantity from the existing cost basis.
-      // The remaining quantity and its proportional cost stay in the portfolio.
-      const avgCost=h.qty>0?h.cost/h.qty:0;
-      const sellQty=Math.min(n,h.qty);
-      h.qty-=sellQty;
-      h.cost-=sellQty*avgCost;
-      if(h.qty<1e-10){h.qty=0;h.cost=0}
+    const key=t.type+"|"+t.symbol;
+    if(!lots[key])lots[key]=[];
+    const action=t.action,qty=Number(t.qty)||0,unitPrice=Number(t.price)||0,charges=totalCharges(t);
+    if(["BUY","SIP","BONUS","RIGHTS"].includes(action)){
+      const totalCost=qty*unitPrice+charges;
+      lots[key].push({
+        qty,
+        unitCost:qty>0?totalCost/qty:0,
+        date:t.date,
+        name:t.name,
+        symbol:t.symbol,
+        type:t.type,
+        exchange:t.exchange
+      });
+    }else if(["SELL","REDEMPTION"].includes(action)){
+      let left=qty,costBasis=0,firstDate=t.date;
+      const queue=lots[key];
+      while(left>1e-10&&queue.length){
+        const lot=queue[0],take=Math.min(left,lot.qty);
+        if(firstDate===t.date)firstDate=lot.date;
+        costBasis+=take*lot.unitCost;
+        lot.qty-=take;
+        left-=take;
+        if(lot.qty<=1e-10)queue.shift();
+      }
+      const soldQty=qty-left;
+      const proceeds=soldQty*unitPrice-charges;
+      if(soldQty>0){
+        const days=Math.max(0,(new Date(t.date)-new Date(firstDate))/86400000);
+        realized.push({
+          date:t.date,buyDate:firstDate,name:t.name,symbol:t.symbol,qty:soldQty,
+          cost:costBasis,proceeds,pnl:proceeds-costBasis,holdingDays:days
+        });
+      }
+      if(left>1e-10){
+        console.warn("Sale exceeds available holding:",t.symbol,qty-left);
+      }
     }
   });
-  return Object.values(m).filter(h=>h.qty>0).map(h=>{
-    h.avg=h.cost/h.qty;
-    h.current=price(h);
-    h.value=h.qty*h.current;
-    h.pnl=h.value-h.cost;
-    return h
-  })
+  return {lots,realized};
 }
-function realizedLots(){
-  const lots={},out=[];
-  s.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id))).forEach(t=>{
-    if(["BUY","SIP","BONUS","RIGHTS"].includes(t.action))(lots[t.symbol]||(lots[t.symbol]=[])).push({qty:Number(t.qty),price:Number(t.price),date:t.date});
-    if(["SELL","REDEMPTION"].includes(t.action)){
-      let left=Number(t.qty)||0,cost=0,z=lots[t.symbol]||[],firstDate=t.date;
-      while(left>0&&z.length){const l=z[0],take=Math.min(left,l.qty);cost+=take*l.price;if(firstDate===t.date)firstDate=l.date;l.qty-=take;left-=take;if(l.qty<=0)z.shift()}
-      const proceeds=(Number(t.qty)||0)*(Number(t.price)||0)-totalCharges(t),days=Math.max(0,(new Date(t.date)-new Date(firstDate))/86400000);
-      out.push({date:t.date,buyDate:firstDate,name:t.name,symbol:t.symbol,qty:Number(t.qty)||0,cost,proceeds,pnl:proceeds-cost,holdingDays:days})
+
+function holdings(){
+  const inv=buildInventory(),out=[];
+  Object.values(inv.lots).forEach(queue=>{
+    if(!queue.length)return;
+    const h=queue.reduce((a,l)=>{
+      a.qty+=l.qty;
+      a.cost+=l.qty*l.unitCost;
+      a.name=l.name;a.symbol=l.symbol;a.type=l.type;a.exchange=l.exchange;
+      return a;
+    },{qty:0,cost:0,name:"",symbol:"",type:"",exchange:""});
+    if(h.qty>0){
+      h.avg=h.cost/h.qty;
+      h.current=price(h);
+      h.value=h.qty*h.current;
+      h.pnl=h.value-h.cost;
+      out.push(h);
     }
-  });return out
+  });
+  return out;
+}
+
+function realizedLots(){
+  return buildInventory().realized;
 }
 function xnpv(rate,cfs){const d0=cfs[0][0];return cfs.reduce((s,x)=>s+x[1]/Math.pow(1+rate,(x[0]-d0)/365),0)}
 function xirr(cfs){
