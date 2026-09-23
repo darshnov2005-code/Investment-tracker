@@ -46,9 +46,15 @@ export default async function handler(req,res){
       return res.status(502).json({error:d?.error?.message||"Gemini request failed"});
     }
 
-    const summary=(d.candidates||[]).flatMap(c=>c.content?.parts||[]).filter(p=>typeof p.text==="string").map(p=>p.text).join("\n").trim();
-    if(!summary)throw new Error("Gemini returned an empty summary.");
-
+    const raw=(d.candidates||[]).flatMap(c=>c.content?.parts||[]).filter(p=>typeof p.text==="string").map(p=>p.text).join("\n").trim();
+    if(!raw)throw new Error("Gemini returned an empty summary.");
+    let summary;
+    try{
+      const cleaned=raw.replace(/^\s*\`\`\`json\s*/i,"").replace(/\s*\`\`\`\s*$/,"").trim();
+      summary=JSON.parse(cleaned);
+    }catch(_){
+      summary={executive_summary:[raw],financial_performance:[],management_commentary:"",guidance_outlook:"",key_positives:[],key_risks:[],what_to_monitor_next:[],investor_takeaway:""};
+    }
     return res.status(200).json({filename,company,summary,model:"gemini-3.8-flash"});
   }catch(e){
     return res.status(500).json({error:"Unable to summarize PDF",detail:e?.message||"Unknown error"});
