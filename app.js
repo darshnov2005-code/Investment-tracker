@@ -278,7 +278,7 @@ function newsCard(d){
     (items.length?items.map(n=>'<div class="newsitem"><a href="'+esc(n.link||"#")+'" target="_blank" rel="noopener">'+esc(n.title||"Untitled")+'</a><div class="newsmeta">'+esc(n.publisher||"Provider")+' · '+esc(n.published||"")+'</div></div>').join(""):'<div class="empty">No recent news found.</div>')+'</div>';
 }
 async function fetchNewsForHolding(h){
-  const r=await fetch("/api/news?symbol="+encodeURIComponent(h.symbol)+"&exchange="+encodeURIComponent(h.exchange||"NSE"));
+  const r=await fetch("/api/news?symbol="+encodeURIComponent(h.symbol)+"&exchange="+encodeURIComponent(h.exchange||"NSE")+"&name="+encodeURIComponent(h.name||""));
   const d=await r.json();if(!r.ok)throw new Error(d.error||"News unavailable");return d;
 }
 async function loadPortfolioNews(){
