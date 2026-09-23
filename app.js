@@ -94,7 +94,7 @@ async function fetchQuote(symbol,exchange,force=false){
   try{
     const r=await fetch("/api/quote?symbol="+encodeURIComponent(symbol)+"&exchange="+encodeURIComponent(exchange),{signal:ctl.signal});
     const d=await r.json();if(!r.ok||!d.price)throw new Error(d.error||"Quote unavailable");
-    q[symbol+"_prev"]=q[symbol]||d.previousClose||q[symbol+"_prev"]||null;q[symbol]=Number(d.price);q[symbol+"_at"]=Date.now();q[symbol+"_source"]=d.source||"Provider";saveQuotes();return d;
+    q[symbol+"_prevClose"]=Number(d.previousClose)>0?Number(d.previousClose):(q[symbol+"_prevClose"]||null);q[symbol]=Number(d.price);q[symbol+"_at"]=Date.now();q[symbol+"_source"]=d.source||"Provider";saveQuotes();return d;
   }finally{clearTimeout(timer)}
 }
 
@@ -216,7 +216,7 @@ function sources(){const last=s.meta.lastQuoteRefreshAt,age=last?Math.round((Dat
 function dashboard(){
   const t=totals();
   const dayRows=t.h.map(x=>{
-    const prev=Number(q[x.symbol+"_prev"]);
+    const prev=Number(q[x.symbol+"_prevClose"]);
     const current=Number(x.current);
     const dayPnl=(isFinite(prev)&&prev>0)?(current-prev)*Number(x.qty):0;
     const dayPct=(isFinite(prev)&&prev>0)?(current-prev)/prev*100:0;
@@ -518,8 +518,8 @@ document.addEventListener("change",e=>{
 $("mb").onclick=e=>{if(e.target===$("mb"))closeModal()};
 $("unlockPin").addEventListener("keydown",e=>{if(e.key==="Enter")unlock()});
 async function refreshQuotes(silent=false){
-  const hs=holdings(),before={};hs.forEach(h=>before[h.symbol]=q[h.symbol]||null);
-  let ok=0;await Promise.all(hs.map(async h=>{try{await fetchQuote(h.symbol,h.exchange,true);ok++}catch(_){} }));Object.keys(before).forEach(k=>{if(before[k]!=null)q[k+"_prev"]=before[k]});saveQuotes();s.meta.lastQuoteRefreshAt=Date.now();save();render();if(!silent)alert(ok+" quote(s) refreshed.")}
+  const hs=holdings();
+  let ok=0;await Promise.all(hs.map(async h=>{try{await fetchQuote(h.symbol,h.exchange,true);ok++}catch(_){} }));saveQuotes();s.meta.lastQuoteRefreshAt=Date.now();save();render();if(!silent)alert(ok+" quote(s) refreshed.")}
 async function boot(){
   if(!hadSavedState){
     try{
