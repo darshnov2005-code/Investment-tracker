@@ -400,6 +400,7 @@ function render(){
   const titles={dashboard:"Dashboard",holdings:"Holdings",sips:"Mutual Fund SIPs",transactions:"Transactions",realized:"Realised P/L",research:"Stock Research",news:"News & Events",goals:"Goals",import:"CSV Import",settings:"Settings / Data"};
   $("title").textContent=titles[page];document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));$("view").innerHTML=pages[page]();
   if($("autolock"))$("autolock").value=String(s.settings.privacy.autoLockMinutes||30);
+  if(page==="news")loadPortfolioNews();
 }
 document.addEventListener("click",e=>{
   const nav=e.target.closest("[data-page]");if(nav){page=nav.dataset.page;render();return}
@@ -416,6 +417,7 @@ document.addEventListener("click",e=>{
   if(e.target.id==="goal")openGoal();
   if(e.target.id==="researchRun")runResearch();
   if(e.target.id==="newsRun")runNews();
+  if(e.target.id==="newsPortfolioRefresh")loadPortfolioNews();
   if(e.target.dataset.newsSymbol){page="news";render();runNews(e.target.dataset.newsSymbol)}
   if(e.target.id==="close")closeModal();
   if(e.target.id==="unlockBtn")unlock();
