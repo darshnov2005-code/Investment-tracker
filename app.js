@@ -21,13 +21,13 @@ function normalizeState(){
   s.settings=s.settings||{};
   s.settings.privacy=s.settings.privacy||{pinHash:"",autoLockMinutes:30};
   s.settings.backup=s.settings.backup||{enabled:true,lastBackupAt:0,savesSinceBackup:0};
-  s.settings.market=s.settings.market||{refreshTtl:60000};
+  s.settings.market=s.settings.market||{refreshTtl:60000,autoRefresh:false,autoRefreshSeconds:60};s.settings.market.autoRefresh=!!s.settings.market.autoRefresh;s.settings.market.autoRefreshSeconds=Math.max(15,Number(s.settings.market.autoRefreshSeconds)||60);
   s.meta=s.meta||{lastSavedAt:0,lastQuoteRefreshAt:0};
   s.transactions.forEach(t=>{t.charges=Number(t.charges)||0;t.brokerage=Number(t.brokerage)||0;t.stt=Number(t.stt)||0;t.gst=Number(t.gst)||0;t.otherCharges=Number(t.otherCharges)||Math.max(0,(Number(t.charges)||0)-t.brokerage-t.stt-t.gst)});
 }
 normalizeState();
 
-let page="dashboard", mfCache=null, saveTimer=null, lastActivity=Date.now(), locked=false;
+let page="dashboard", mfCache=null, saveTimer=null, lastActivity=Date.now(), locked=false, autoRefreshTimer=null;
 let privacyHidden=localStorage.getItem("investtrack-privacy-hidden")==="1";
 function privateMoney(n){return privacyHidden?"••••••":money(n)}
 function privatePct(n){return privacyHidden?"••••":pct(n)}
@@ -338,7 +338,7 @@ function importPage(){return'<div class="card"><h2>CSV import</h2><p class="mute
 
 function settingsPage(){
   const p=!!s.settings.privacy.pinHash,b=s.settings.backup;
-  return'<div class="grid two"><div class="card"><h2>Privacy & local lock</h2><p class="muted">The PIN locks the app UI in this browser. It is not encryption and does not protect data from developer-tools access.</p><div class="form"><div class="field"><label>New PIN</label><div class="pinwrap"><input class="input wide" id="pin1" type="password" maxlength="8" inputmode="numeric" placeholder="4–8 digits"><button type="button" class="pin-eye" data-toggle-pin="pin1" aria-label="Show PIN">◉</button></div></div><div class="field"><label>Confirm PIN</label><div class="pinwrap"><input class="input wide" id="pin2" type="password" maxlength="8" inputmode="numeric"><button type="button" class="pin-eye" data-toggle-pin="pin2" aria-label="Show PIN">◉</button></div></div></div><div class="modalfoot"><button class="btn" id="setpin">'+(p?"Change PIN":"Set PIN")+'</button><button class="btn" id="lockNow">Lock now</button></div><div class="muted">Auto-lock <select class="select" id="autolock"><option value="0">Never</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></div></div><div class="card"><h2>Automatic backup / restore</h2><p class="muted">Automatic snapshots are stored locally in IndexedDB. The app also keeps the primary portfolio in localStorage.</p><div class="sourcebar"><span class="status"><i class="dot"></i> Auto backup: On</span><span class="status">Last snapshot: '+(b.lastBackupAt?new Date(b.lastBackupAt).toLocaleString("en-IN"):"Not yet")+'</span></div><div class="modalfoot"><button class="btn" id="backupNow">Backup now</button><button class="btn" id="restoreBackup">Restore latest</button><button class="btn" id="export">Export JSON</button><label class="btn">Import JSON<input id="importJson" type="file" accept=".json" hidden></label></div></div></div><div class="grid two" style="margin-top:12px"><div class="card"><h2>Market data & reliability</h2><p class="muted">Stocks/ETFs use Yahoo Finance with NSE fallback where available. Mutual funds use AMFI. Research and news use Yahoo Finance. Failed refreshes do not overwrite the last known good quote.</p><label class="muted">Quote cache TTL (seconds)<input class="input" id="ttl" type="number" min="10" value="'+(Number(s.settings.market.refreshTtl)/1000)+'"></label>'+sources()+'</div><div class="card"><h2>Danger zone</h2><p class="muted">Resetting deletes this browser portfolio state and restores demo data.</p><button class="btn danger" id="reset">Reset demo</button></div></div>'
+  return'<div class="grid two"><div class="card"><h2>Privacy & local lock</h2><p class="muted">The PIN locks the app UI in this browser. It is not encryption and does not protect data from developer-tools access.</p><div class="form"><div class="field"><label>New PIN</label><div class="pinwrap"><input class="input wide" id="pin1" type="password" maxlength="8" inputmode="numeric" placeholder="4–8 digits"><button type="button" class="pin-eye" data-toggle-pin="pin1" aria-label="Show PIN">◉</button></div></div><div class="field"><label>Confirm PIN</label><div class="pinwrap"><input class="input wide" id="pin2" type="password" maxlength="8" inputmode="numeric"><button type="button" class="pin-eye" data-toggle-pin="pin2" aria-label="Show PIN">◉</button></div></div></div><div class="modalfoot"><button class="btn" id="setpin">'+(p?"Change PIN":"Set PIN")+'</button><button class="btn" id="lockNow">Lock now</button></div><div class="muted">Auto-lock <select class="select" id="autolock"><option value="0">Never</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option></select></div></div><div class="card"><h2>Automatic backup / restore</h2><p class="muted">Automatic snapshots are stored locally in IndexedDB. The app also keeps the primary portfolio in localStorage.</p><div class="sourcebar"><span class="status"><i class="dot"></i> Auto backup: On</span><span class="status">Last snapshot: '+(b.lastBackupAt?new Date(b.lastBackupAt).toLocaleString("en-IN"):"Not yet")+'</span></div><div class="modalfoot"><button class="btn" id="backupNow">Backup now</button><button class="btn" id="restoreBackup">Restore latest</button><button class="btn" id="export">Export JSON</button><label class="btn">Import JSON<input id="importJson" type="file" accept=".json" hidden></label></div></div></div><div class="grid two" style="margin-top:12px"><div class="card"><h2>Market data & reliability</h2><p class="muted">Stocks/ETFs use Yahoo Finance with NSE fallback where available. Mutual funds use AMFI. Research and news use Yahoo Finance. Failed refreshes do not overwrite the last known good quote.</p><label class="muted">Quote cache TTL (seconds)<input class="input" id="ttl" type="number" min="10" value="'+(Number(s.settings.market.refreshTtl)/1000)+'"></label><div class="form" style="margin-top:12px"><div class="field"><label><input type="checkbox" id="autoRefreshQuotes" " + (s.settings.market.autoRefresh?"checked":"") + "> Automatically refresh market data</label></div><div class="field"><label>Auto-refresh frequency</label><select class="select wide" id="autoRefreshSeconds"><option value="60" " + (s.settings.market.autoRefreshSeconds===60?"selected":"") + ">Every 1 minute</option><option value="120" " + (s.settings.market.autoRefreshSeconds===120?"selected":"") + ">Every 2 minutes</option><option value="300" " + (s.settings.market.autoRefreshSeconds===300?"selected":"") + ">Every 5 minutes</option><option value="600" " + (s.settings.market.autoRefreshSeconds===600?"selected":"") + ">Every 10 minutes</option><option value="900" " + (s.settings.market.autoRefreshSeconds===900?"selected":"") + ">Every 15 minutes</option></select></div></div><div class="muted">Refreshes quotes automatically while the app is open.</div>'+sources()+'</div><div class="card"><h2>Danger zone</h2><p class="muted">Resetting deletes this browser portfolio state and restores demo data.</p><button class="btn danger" id="reset">Reset demo</button></div></div>'
 }
 function openModal(html){$("modal").innerHTML=html;$("mb").classList.remove("hidden")}
 function closeModal(){$("mb").classList.add("hidden")}
@@ -368,6 +368,7 @@ function openGoal(){
   $("close").onclick=closeModal;$("gf").onsubmit=e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));o.id=String(Date.now());o.target=Number(o.target);o.current=Number(o.current)||0;o.monthlyContribution=Number(o.monthlyContribution)||0;o.linkPortfolio=o.linkPortfolio==="true";s.goals.push(o);save();closeModal();render()}
 }
 
+function setupAutoRefresh(){if(autoRefreshTimer){clearInterval(autoRefreshTimer);autoRefreshTimer=null}if(!s.settings.market.autoRefresh)return;autoRefreshTimer=setInterval(async()=>{if(locked||document.hidden)return;try{await refreshQuotes(true)}catch(e){console.warn("Auto refresh failed",e)}},Math.max(15,Number(s.settings.market.autoRefreshSeconds)||60)*1000)}
 function render(){
   const pages={dashboard:dashboard,holdings:holdingsPage,sips:sipsPage,transactions:transactionsPage,realized:realizedPage,research:researchPage,news:newsPage,goals:goalsPage,import:importPage,settings:settingsPage};
   const titles={dashboard:"Dashboard",holdings:"Holdings",sips:"Mutual Fund SIPs",transactions:"Transactions",realized:"Realised P/L",research:"Stock Research",news:"News & Events",goals:"Goals",import:"CSV Import",settings:"Settings / Data"};
@@ -408,14 +409,16 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.id==="autolock"){s.settings.privacy.autoLockMinutes=Number(e.target.value);save()}
+  if(e.target.id==="autoRefreshQuotes"){s.settings.market.autoRefresh=e.target.checked;save();setupAutoRefresh()}
+  if(e.target.id==="autoRefreshSeconds"){s.settings.market.autoRefreshSeconds=Math.max(15,Number(e.target.value)||60);save();setupAutoRefresh()}
   if(e.target.id==="ttl"){s.settings.market.refreshTtl=Math.max(10000,Number(e.target.value||60)*1000);save()}
   if(e.target.id==="importJson"){const file=e.target.files?.[0];if(file){const r=new FileReader();r.onload=()=>{try{const x=JSON.parse(r.result);if(!Array.isArray(x.transactions))throw new Error("Invalid backup");s=x;normalizeState();save();render();alert("Backup imported.")}catch(err){alert("Import failed: "+err.message)}};r.readAsText(file)}}
 });
 $("mb").onclick=e=>{if(e.target===$("mb"))closeModal()};
 $("unlockPin").addEventListener("keydown",e=>{if(e.key==="Enter")unlock()});
-async function refreshQuotes(){
+async function refreshQuotes(silent=false){
   const hs=holdings(),before={};hs.forEach(h=>before[h.symbol]=q[h.symbol]||null);
-  let ok=0;await Promise.all(hs.map(async h=>{try{await fetchQuote(h.symbol,h.exchange,true);ok++}catch(_){} }));Object.keys(before).forEach(k=>{if(before[k]!=null)q[k+"_prev"]=before[k]});saveQuotes();s.meta.lastQuoteRefreshAt=Date.now();save();render();alert(ok+" quote(s) refreshed.")}
+  let ok=0;await Promise.all(hs.map(async h=>{try{await fetchQuote(h.symbol,h.exchange,true);ok++}catch(_){} }));Object.keys(before).forEach(k=>{if(before[k]!=null)q[k+"_prev"]=before[k]});saveQuotes();s.meta.lastQuoteRefreshAt=Date.now();save();render();if(!silent)alert(ok+" quote(s) refreshed.")}
 async function boot(){
   if(!hadSavedState){
     try{
@@ -430,4 +433,5 @@ async function boot(){
   render();
   if(s.settings.privacy.pinHash)lock();
 }
+setupAutoRefresh();
 boot();
