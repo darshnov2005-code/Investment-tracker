@@ -264,11 +264,37 @@ async function runResearch(){
   try{const r=await fetch("/api/research?symbol="+encodeURIComponent(symbol)+"&exchange="+encodeURIComponent(ex));const d=await r.json();if(!r.ok)throw new Error(d.error||"Research unavailable");out.innerHTML=researchHTML(d)}catch(e){out.innerHTML='<div class="card empty">Could not load research: '+esc(e.message||"Provider error")+'</div>'}
 }
 
-function newsPage(){return'<div class="grid two"><div class="card"><h2>News & Events</h2><p class="muted">Recent company news from the external market-data provider. This section is informational.</p><div class="search"><input class="input" id="newsSymbol" placeholder="NSE symbol e.g. RELIANCE"><button class="btn primary" id="newsRun">Load news</button></div></div><div class="card"><div class="label">Portfolio shortcut</div><p class="muted">You can open news from a stock in Stock Research.</p></div></div><div id="newsResult" style="margin-top:12px"><div class="card empty">Enter a symbol to load news.</div></div>'}
+function newsPage(){
+  const portfolioStocks=holdings().filter(x=>["STOCK","ETF"].includes(x.type));
+  const unique=[];const seen=new Set();portfolioStocks.forEach(x=>{const k=x.exchange+"|"+x.symbol;if(!seen.has(k)){seen.add(k);unique.push(x)}});
+  return '<div class="card"><div class="head" style="margin:0 0 10px"><div><h2 style="margin:0">Portfolio News</h2><div class="muted">Latest news for stocks and ETFs currently held in your portfolio.</div></div><button class="btn" id="newsPortfolioRefresh">↻ Refresh news</button></div>'+
+    '<div class="search"><input class="input wide" id="newsSymbol" placeholder="Search any stock/company news e.g. INFY, TATA MOTORS"><button class="btn primary" id="newsRun">Search</button></div></div>'+
+    '<div id="newsPortfolioResult" style="margin-top:12px">'+(unique.length?'<div class="card empty">Loading portfolio news…</div>':'<div class="card empty">No stock or ETF holdings found. Add an investment to automatically see its news here.</div>')+'</div>'+
+    '<div id="newsSearchResult" style="margin-top:12px"></div>';
+}
+function newsCard(d){
+  const items=d.items||[];
+  return '<div class="card" style="margin-bottom:12px"><div class="head" style="margin:0 0 8px"><div><h2 style="margin:0">'+esc(d.name||d.symbol||"Stock")+'</h2><div class="sub">'+esc(d.symbol||"")+' · '+esc(d.exchange||"NSE")+'</div></div><span class="muted">'+esc(d.source||"Yahoo Finance")+'</span></div>'+
+    (items.length?items.map(n=>'<div class="newsitem"><a href="'+esc(n.link||"#")+'" target="_blank" rel="noopener">'+esc(n.title||"Untitled")+'</a><div class="newsmeta">'+esc(n.publisher||"Provider")+' · '+esc(n.published||"")+'</div></div>').join(""):'<div class="empty">No recent news found.</div>')+'</div>';
+}
+async function fetchNewsForHolding(h){
+  const r=await fetch("/api/news?symbol="+encodeURIComponent(h.symbol)+"&exchange="+encodeURIComponent(h.exchange||"NSE"));
+  const d=await r.json();if(!r.ok)throw new Error(d.error||"News unavailable");return d;
+}
+async function loadPortfolioNews(){
+  const out=$("newsPortfolioResult");if(!out)return;
+  const stocks=holdings().filter(x=>["STOCK","ETF"].includes(x.type));
+  const unique=[];const seen=new Set();stocks.forEach(x=>{const k=x.exchange+"|"+x.symbol;if(!seen.has(k)){seen.add(k);unique.push(x)}});
+  if(!unique.length){out.innerHTML='<div class="card empty">No stock or ETF holdings found. Add an investment to automatically see its news here.</div>';return}
+  out.innerHTML='<div class="card empty">Loading news for '+unique.length+' portfolio holding'+(unique.length===1?'':'s')+'…</div>';
+  const results=await Promise.all(unique.map(async h=>{try{return await fetchNewsForHolding(h)}catch(e){return {symbol:h.symbol,name:h.name,exchange:h.exchange,source:"",items:[],error:e.message||"Unable to load news"}}}));
+  out.innerHTML='<div class="label" style="margin:0 0 8px">NEWS FOR YOUR PORTFOLIO</div>'+results.map(d=>d.error?'<div class="card" style="margin-bottom:12px"><b>'+esc(d.name||d.symbol)+'</b><div class="muted" style="margin-top:5px">Could not load news: '+esc(d.error)+'</div></div>':newsCard(d)).join("");
+}
 async function runNews(symbol){
-  symbol=(symbol||$("newsSymbol")?.value||"").trim().toUpperCase();const out=$("newsResult");if(!symbol)return out.innerHTML='<div class="card empty">Enter a symbol.</div>';
-  out.innerHTML='<div class="card empty">Loading news…</div>';
-  try{const r=await fetch("/api/news?symbol="+encodeURIComponent(symbol));const d=await r.json();if(!r.ok)throw new Error(d.error||"News unavailable");const items=d.items||[];out.innerHTML='<div class="card"><div class="head" style="margin:0 0 8px"><h2>'+esc(d.name||symbol)+'</h2><span class="muted">Source: '+esc(d.source||"Yahoo Finance")+'</span></div>'+(items.length?items.map(n=>'<div class="newsitem"><a href="'+esc(n.link||"#")+'" target="_blank" rel="noopener">'+esc(n.title||"Untitled")+'</a><div class="newsmeta">'+esc(n.publisher||"Provider")+' · '+esc(n.published||"")+'</div></div>').join(""):'<div class="empty">No recent news found.</div>')+'</div>'}catch(e){out.innerHTML='<div class="card empty">Could not load news: '+esc(e.message||"Provider error")+'</div>'}
+  symbol=(symbol||$("newsSymbol")?.value||"").trim().toUpperCase();const out=$("newsSearchResult");if(!out)return;
+  if(!symbol){out.innerHTML="";return}
+  out.innerHTML='<div class="card empty">Searching news for '+esc(symbol)+'…</div>';
+  try{const r=await fetch("/api/news?symbol="+encodeURIComponent(symbol)+"&exchange=NSE");const d=await r.json();if(!r.ok)throw new Error(d.error||"News unavailable");out.innerHTML='<div class="label" style="margin:0 0 8px">SEARCH RESULTS</div>'+newsCard(d)}catch(e){out.innerHTML='<div class="card empty">Could not load news: '+esc(e.message||"Provider error")+'</div>'}
 }
 
 function goalsPage(){
