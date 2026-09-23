@@ -301,19 +301,33 @@ function summaryPage(){
   return '<div class="grid two"><div class="card"><h2>AI PDF Document Summary</h2><p class="muted">Upload an earnings transcript, investor presentation or other PDF and get a concise investor-focused summary instead of reading the entire document.</p><div class="field" style="margin-top:12px"><label>Company / stock (optional)</label><input class="input wide" id="summaryCompany" placeholder="e.g. TCS"></div><div class="field" style="margin-top:10px"><label>PDF document</label><input class="input wide" id="summaryFile" type="file" accept=".pdf,application/pdf"></div><div class="notice" style="margin-top:10px">PDFs are processed for the summary through the AI service. Do not upload confidential documents you are not authorized to share.</div><div class="modalfoot"><button class="btn primary" id="summarizePdf">✦ Summarise PDF</button></div></div><div class="card"><h2>What you get</h2><div class="insights"><div class="insight">📌 Executive summary</div><div class="insight">📊 Financial performance</div><div class="insight">🗣️ Management commentary</div><div class="insight">🎯 Guidance & outlook</div><div class="insight">⚠️ Key risks</div><div class="insight">🔎 What to monitor next</div></div></div></div><div id="summaryResult" style="margin-top:12px"><div class="card empty">Choose a PDF to generate its summary.</div></div>';
 }
 async function summarizePdf(){
-  const file=$("summaryFile")?.files?.[0],out=$("summaryResult");if(!file||!out)return alert("Please select a PDF first.");
+  const file=$("summaryFile")?.files?.[0],out=$("summaryResult");
+  if(!file||!out)return alert("Please select a PDF first.");
   if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf"))return alert("Please select a PDF file.");
   if(file.size>50*1024*1024)return alert("Please use a PDF under 50 MB.");
-  out.innerHTML='<div class="card empty">Uploading and analysing '+esc(file.name)+'…<br><span class="muted">Large earnings transcripts can take a little time.</span></div>';
+  if(!window.pdfjsLib)return alert("PDF reader is still loading. Please wait a few seconds and try again.");
+  out.innerHTML='<div class="card empty">Reading '+esc(file.name)+'…<br><span class="muted">The PDF is extracted in your browser first, then only the text is sent for AI analysis.</span></div>';
   try{
-    const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error("Could not read PDF"));r.readAsDataURL(file)});
-    const r=await fetch("/api/summarize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,fileData:data,company:$("summaryCompany")?.value||""})});
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+    let pages=[];
+    for(let n=1;n<=pdf.numPages;n++){
+      const page=await pdf.getPage(n),tc=await page.getTextContent();
+      const text=tc.items.map(x=>x.str||"").join(" ").replace(/\s+/g," ").trim();
+      if(text)pages.push("[Page "+n+"]\n"+text);
+      if(n%10===0)out.innerHTML='<div class="card empty">Reading PDF… page '+n+' of '+pdf.numPages+'</div>';
+    }
+    const extracted=pages.join("\n\n");
+    if(extracted.length<100)throw new Error("No readable text was found in this PDF. If it is scanned/image-only, use a text-based PDF or OCR it first.");
+    if(extracted.length>5000000)throw new Error("This PDF contains more than 5 million characters. Please use a shorter document.");
+    out.innerHTML='<div class="card empty">Sending extracted text to AI…<br><span class="muted">'+pdf.numPages+' pages read successfully.</span></div>';
+    const r=await fetch("/api/summarize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,text:extracted,company:$("summaryCompany")?.value||""})});
     const d=await r.json();if(!r.ok)throw new Error(d.error||d.detail||"Summary failed");
-    const html=esc(d.summary||"").replace(/\\n/g,"<br>");
+    const html=esc(d.summary||"").replace(/\n/g,"<br>");
     out.innerHTML='<div class="card"><div class="head" style="margin:0 0 10px"><div><h2>AI Summary</h2><div class="muted">'+esc(d.company||"")+' · '+esc(d.filename||file.name)+'</div></div><span class="pill">AI</span></div><div style="line-height:1.7;font-size:13px">'+html+'</div><div class="notice" style="margin-top:14px">AI-generated summary. Verify important financial figures against the original filing/transcript before making decisions.</div></div>';
   }catch(e){out.innerHTML='<div class="card empty">Could not generate summary: '+esc(e.message||"Unknown error")+'</div>'}
 }
-
 function goalsPage(){
   const pv=totals().value;
   return'<div class="head"><h2>Financial goals</h2><button class="btn primary" id="goal">Add goal</button></div><div class="grid three">'+(s.goals.length?s.goals.map(g=>{const current=g.linkPortfolio===false?Number(g.current)||0:pv,p=g.target?Math.min(100,current/g.target*100):0,months=g.date?Math.max(1,Math.ceil((new Date(g.date)-new Date())/(30.44*86400000))):1,need=Math.max(0,(Number(g.target)||0-current)/months);return'<div class="card"><div class="row"><b>'+esc(g.name)+'</b><span class="muted">'+esc(g.date||"No date")+'</span></div><div class="big">'+money(current)+'</div><div class="muted">of '+money(g.target)+'</div><div class="progress"><i style="width:'+p+'%"></i></div><div class="row muted" style="margin-top:7px"><span>'+p.toFixed(1)+'%</span><span>'+money(Math.max(0,g.target-current))+' remaining</span></div><div class="notice" style="margin-top:10px">Required monthly: <b>'+money(need)+'</b><br>Planned monthly: <b>'+money(g.monthlyContribution||0)+'</b></div></div>'}).join(""):'<div class="card empty">Create a goal such as a ₹10 lakh portfolio, car fund or emergency fund.</div>')+'</div>'
