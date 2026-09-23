@@ -11,6 +11,7 @@ const DEMO=[
 
 let q=JSON.parse(localStorage.getItem("investtrack-quotes")||"{}");
 let saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(LEGACY_KEY)||"null");
+const hadSavedState=!!saved;
 let s=saved||{version:STATE_VERSION,transactions:DEMO,sips:[],goals:[],settings:{privacy:{pinHash:"",autoLockMinutes:30},backup:{enabled:true,lastBackupAt:0,savesSinceBackup:0},market:{refreshTtl:60000}},meta:{lastSavedAt:0,lastQuoteRefreshAt:0}};
 function normalizeState(){
   s.version=STATE_VERSION;
@@ -415,5 +416,18 @@ $("unlockPin").addEventListener("keydown",e=>{if(e.key==="Enter")unlock()});
 async function refreshQuotes(){
   const hs=holdings(),before={};hs.forEach(h=>before[h.symbol]=q[h.symbol]||null);
   let ok=0;await Promise.all(hs.map(async h=>{try{await fetchQuote(h.symbol,h.exchange,true);ok++}catch(_){} }));Object.keys(before).forEach(k=>{if(before[k]!=null)q[k+"_prev"]=before[k]});saveQuotes();s.meta.lastQuoteRefreshAt=Date.now();save();render();alert(ok+" quote(s) refreshed.")}
-render();
-if(s.settings.privacy.pinHash)lock();
+async function boot(){
+  if(!hadSavedState){
+    try{
+      const backup=await latestBackup();
+      if(backup&&Array.isArray(backup.transactions)&&backup.transactions.length){
+        s=backup;
+        normalizeState();
+        save();
+      }
+    }catch(_){}
+  }
+  render();
+  if(s.settings.privacy.pinHash)lock();
+}
+boot();
