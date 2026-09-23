@@ -15,15 +15,15 @@ export default async function handler(req,res){
 
     const prompt="You are an equity-research assistant. Summarize this earnings transcript for an investor who does not want to read the full document.\n"+
       (company?"Company: "+company+"\n":"")+
-      "Return a concise but detailed investment-relevant summary with these sections:\n"+
-      "1. Executive summary — 5-8 bullets\n"+
-      "2. Financial performance — revenue, EBITDA/EBIT, margins, PAT, EPS, cash flow, debt and other material figures mentioned; include YoY/QoQ changes when stated\n"+
-      "3. Management commentary — demand, segments, geographies, capacity, margins, competition and strategy\n"+
-      "4. Guidance & outlook — explicit management guidance, targets and timelines\n"+
-      "5. Key positives — concrete points from the transcript\n"+
+      "Return ONLY a valid JSON object. Do not return markdown, headings, commentary, or prose outside the JSON. The JSON must contain ALL of these keys: executive_summary, financial_performance, management_commentary, guidance_outlook, key_positives, key_risks, what_to_monitor_next, investor_takeaway. Every key must be populated from the document; use [] only when the document genuinely contains no relevant information. Each section must be independent and must NOT repeat the entire document.\n"+
+      "1. Executive summary — 5-6 concise bullets covering only the most important overall developments.\n"+
+      "2. Financial performance — 5-8 concise bullets containing ONLY reported financial numbers and changes: revenue, EBITDA/EBIT, margins, PAT, EPS, cash flow, debt, capex and segment performance. Include period and YoY/QoQ change whenever stated. Do not put these figures in executive_summary unless they are essential.\n"+
+      "3. Management commentary — 4-7 concise bullets covering management's comments on demand, segments, geographies, capacity, margins, competition and strategy. Clearly attribute statements to management.\n"+
+      "4. Guidance & outlook — 3-6 concise bullets containing ONLY explicit guidance, targets, expected growth/margins/capex and timelines stated by management. If guidance is not provided, say that clearly.\n"+
+      "5. Key positives — 4-6 short, evidence-based bullets. Do not simply repeat financial performance.\n"+
       "6. Key risks / concerns — concrete points from the transcript\n"+
-      "7. What to monitor next — 5-8 specific items for the next quarter/year\n"+
-      "8. Investor takeaway — a balanced factual conclusion, without giving personalized investment advice\n\n"+
+      "7. What to monitor next — 5-8 specific forward-looking items that an investor should track in the next quarter/year, based only on the document.\n"+
+      "8. Investor takeaway — 3-5 concise balanced bullets summarising what the transcript indicates, without personalized investment advice.\n\n"+
       "Important: distinguish reported facts from management commentary. Do not invent numbers. If a figure is not stated, say so. Preserve units and periods exactly where possible. If management makes a claim, attribute it to management. Keep the summary substantially shorter than the source.\n\n"+
       "DOCUMENT TEXT:\n"+text;
 
@@ -33,7 +33,7 @@ export default async function handler(req,res){
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         contents:[{role:"user",parts:[{text:prompt}]}],
-        generationConfig:{maxOutputTokens:8000}
+        generationConfig:{maxOutputTokens:8000,responseMimeType:"application/json"}
       })
     });
 
@@ -55,7 +55,10 @@ export default async function handler(req,res){
     }catch(_){
       summary={executive_summary:[raw],financial_performance:[],management_commentary:"",guidance_outlook:"",key_positives:[],key_risks:[],what_to_monitor_next:[],investor_takeaway:""};
     }
-    return res.status(200).json({filename,company,summary,model:"gemini-3.8-flash"});
+    const keys=["executive_summary","financial_performance","management_commentary","guidance_outlook","key_positives","key_risks","what_to_monitor_next","investor_takeaway"];
+    const normalized={};
+    keys.forEach(k=>{const v=summary?.[k];normalized[k]=Array.isArray(v)?v.filter(x=>String(x||"").trim()).map(x=>String(x).replace(/^[•*-]\s*/,"").trim()):String(v||"").trim()});
+    return res.status(200).json({filename,company,summary:normalized,model:"gemini-3.8-flash"});
   }catch(e){
     return res.status(500).json({error:"Unable to summarize PDF",detail:e?.message||"Unknown error"});
   }
