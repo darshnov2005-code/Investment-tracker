@@ -44,20 +44,21 @@ export default async function handler(req, res) {
       price: p,
       previousClose: Number(d?.priceInfo?.previousClose ?? 0) || null,
       currency: "INR",
-      marketState: "OPEN_OR_CLOSED",
+      marketState: d?.marketStatus?.marketState || "OPEN_OR_CLOSED",
       source: "NSE India"
     };
   }
 
   try {
-    // Yahoo is used first because the public NSE website endpoint can reject
-    // serverless requests without an NSE session/cookie.
-    if (exchange === "NSE" || exchange === "BSE") {
-      try { return res.status(200).json(await yahoo()); }
-      catch (_) {
-        if (exchange === "NSE") return res.status(200).json(await nse());
-        throw _;
-      }
+    // Prefer the exchange's current market endpoint for NSE. Yahoo remains the
+    // fallback because public market feeds may be delayed and are not guaranteed
+    // to provide exchange-grade real-time data.
+    if (exchange === "NSE") {
+      try { return res.status(200).json(await nse()); }
+      catch (_) { return res.status(200).json(await yahoo()); }
+    }
+    if (exchange === "BSE") {
+      return res.status(200).json(await yahoo());
     }
 
     if (exchange === "AMFI") {
