@@ -298,15 +298,21 @@ async function runNews(symbol){
 }
 
 function summaryPage(){
-  return '<div class="grid two"><div class="card"><h2>AI PDF Document Summary</h2><p class="muted">Upload an earnings transcript, investor presentation or other PDF and get a concise investor-focused summary instead of reading the entire document.</p><div class="field" style="margin-top:12px"><label>Company / stock (optional)</label><input class="input wide" id="summaryCompany" placeholder="e.g. TCS"></div><div class="field" style="margin-top:10px"><label>PDF document</label><input class="input wide" id="summaryFile" type="file" accept=".pdf,application/pdf"></div><div class="notice" style="margin-top:10px">PDFs are processed for the summary through the AI service. Do not upload confidential documents you are not authorized to share.</div><div class="modalfoot"><button class="btn primary" id="summarizePdf">✦ Summarise PDF</button></div></div><div class="card"><h2>What you get</h2><div class="insights"><div class="insight">📌 Executive summary</div><div class="insight">📊 Financial performance</div><div class="insight">🗣️ Management commentary</div><div class="insight">🎯 Guidance & outlook</div><div class="insight">⚠️ Key risks</div><div class="insight">🔎 What to monitor next</div></div></div></div><div id="summaryResult" style="margin-top:12px"><div class="card empty">Choose a PDF to generate its summary.</div></div>';
+  return '<div class="card"><h2>AI PDF Document Summary</h2><p class="muted">Upload an earnings transcript, investor presentation or other PDF and get a structured investor-focused summary.</p><div class="field" style="margin-top:12px"><label>Company / stock (optional)</label><input class="input wide" id="summaryCompany" placeholder="e.g. TCS"></div><div class="field" style="margin-top:10px"><label>PDF document</label><input class="input wide" id="summaryFile" type="file" accept=".pdf,application/pdf"></div><div class="notice" style="margin-top:10px">The PDF is extracted in your browser first. Only the extracted text is sent to the AI service.</div><div class="modalfoot"><button class="btn primary" id="summarizePdf">✦ Summarise PDF</button></div></div><div class="card" style="margin-top:12px"><div class="head" style="margin:0 0 12px"><div><h2>What you get</h2><div id="summaryMeta" class="muted">Your structured summary will appear under each heading below.</div></div><span class="pill">AI</span></div><div id="summarySections"><div class="grid two"><div class="insight">📌 <b>Executive summary</b><div class="muted" style="margin-top:6px">5–8 key takeaways from the document.</div></div><div class="insight">📊 <b>Financial performance</b><div class="muted" style="margin-top:6px">Revenue, margins, PAT, EPS, cash flow and debt.</div></div><div class="insight">🗣️ <b>Management commentary</b><div class="muted" style="margin-top:6px">Demand, segments, strategy and management comments.</div></div><div class="insight">🎯 <b>Guidance & outlook</b><div class="muted" style="margin-top:6px">Targets, guidance and timelines stated by management.</div></div><div class="insight">✅ <b>Key positives</b><div class="muted" style="margin-top:6px">Concrete positive developments from the document.</div></div><div class="insight">⚠️ <b>Key risks / concerns</b><div class="muted" style="margin-top:6px">Specific risks and concerns mentioned.</div></div><div class="insight">🔎 <b>What to monitor next</b><div class="muted" style="margin-top:6px">Important items to track in the next quarter/year.</div></div><div class="insight">💡 <b>Investor takeaway</b><div class="muted" style="margin-top:6px">Balanced factual conclusion, not personalized advice.</div></div></div></div></div>';
+}
+function summarySection(title,icon,value){
+  const items=Array.isArray(value)?value:[value];
+  return '<div class="card" style="height:100%"><div style="font-weight:800;font-size:13px">'+icon+' '+esc(title)+'</div><div style="margin-top:10px;line-height:1.7;font-size:12px">'+items.filter(Boolean).map(x=>Array.isArray(x)?esc(x):esc(String(x))).map(x=>'<div style="margin:0 0 7px">• '+x+'</div>').join("")+'</div></div>';
 }
 async function summarizePdf(){
-  const file=$("summaryFile")?.files?.[0],out=$("summaryResult");
-  if(!file||!out)return alert("Please select a PDF first.");
+  const file=$("summaryFile")?.files?.[0];
+  if(!file)return alert("Please select a PDF first.");
   if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf"))return alert("Please select a PDF file.");
   if(file.size>50*1024*1024)return alert("Please use a PDF under 50 MB.");
   if(!window.pdfjsLib)return alert("PDF reader is still loading. Please wait a few seconds and try again.");
-  out.innerHTML='<div class="card empty">Reading '+esc(file.name)+'…<br><span class="muted">The PDF is extracted in your browser first, then only the text is sent for AI analysis.</span></div>';
+  const sections=$("summarySections"),meta=$("summaryMeta");
+  if(!sections)return;
+  sections.innerHTML='<div class="card empty">Reading '+esc(file.name)+'…<br><span class="muted">The PDF is extracted in your browser first.</span></div>';
   try{
     const bytes=new Uint8Array(await file.arrayBuffer());
     pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -316,17 +322,30 @@ async function summarizePdf(){
       const page=await pdf.getPage(n),tc=await page.getTextContent();
       const text=tc.items.map(x=>x.str||"").join(" ").replace(/\s+/g," ").trim();
       if(text)pages.push("[Page "+n+"]\n"+text);
-      if(n%10===0)out.innerHTML='<div class="card empty">Reading PDF… page '+n+' of '+pdf.numPages+'</div>';
+      if(n%10===0)sections.innerHTML='<div class="card empty">Reading PDF… page '+n+' of '+pdf.numPages+'</div>';
     }
     const extracted=pages.join("\n\n");
     if(extracted.length<100)throw new Error("No readable text was found in this PDF. If it is scanned/image-only, use a text-based PDF or OCR it first.");
     if(extracted.length>5000000)throw new Error("This PDF contains more than 5 million characters. Please use a shorter document.");
-    out.innerHTML='<div class="card empty">Sending extracted text to AI…<br><span class="muted">'+pdf.numPages+' pages read successfully.</span></div>';
+    sections.innerHTML='<div class="card empty">Analysing with AI…<br><span class="muted">'+pdf.numPages+' pages read successfully.</span></div>';
     const r=await fetch("/api/summarize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,text:extracted,company:$("summaryCompany")?.value||""})});
     const d=await r.json();if(!r.ok)throw new Error(d.error||d.detail||"Summary failed");
-    const html=esc(d.summary||"").replace(/\n/g,"<br>");
-    out.innerHTML='<div class="card"><div class="head" style="margin:0 0 10px"><div><h2>AI Summary</h2><div class="muted">'+esc(d.company||"")+' · '+esc(d.filename||file.name)+'</div></div><span class="pill">AI</span></div><div style="line-height:1.7;font-size:13px">'+html+'</div><div class="notice" style="margin-top:14px">AI-generated summary. Verify important financial figures against the original filing/transcript before making decisions.</div></div>';
-  }catch(e){out.innerHTML='<div class="card empty">Could not generate summary: '+esc(e.message||"Unknown error")+'</div>'}
+    const x=d.summary||{};
+    sections.innerHTML='<div class="grid two">'+
+      summarySection("Executive summary","📌",x.executive_summary)+
+      summarySection("Financial performance","📊",x.financial_performance)+
+      summarySection("Management commentary","🗣️",x.management_commentary)+
+      summarySection("Guidance & outlook","🎯",x.guidance_outlook)+
+      summarySection("Key positives","✅",x.key_positives)+
+      summarySection("Key risks / concerns","⚠️",x.key_risks)+
+      summarySection("What to monitor next","🔎",x.what_to_monitor_next)+
+      summarySection("Investor takeaway","💡",x.investor_takeaway)+
+      '</div><div class="notice" style="margin-top:12px">AI-generated summary. Verify important financial figures against the original filing/transcript before making decisions.</div>';
+    meta.textContent=(d.company?d.company+" · ":"")+((d.filename||file.name))+" · "+pdf.numPages+" pages";
+  }catch(e){
+    sections.innerHTML='<div class="card empty">Could not generate summary: '+esc(e.message||"Unknown error")+'</div>';
+    meta.textContent="Summary not available";
+  }
 }
 function goalsPage(){
   const pv=totals().value;
