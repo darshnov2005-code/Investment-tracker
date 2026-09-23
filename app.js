@@ -297,6 +297,23 @@ async function runNews(symbol){
   try{const r=await fetch("/api/news?symbol="+encodeURIComponent(symbol)+"&exchange=NSE");const d=await r.json();if(!r.ok)throw new Error(d.error||"News unavailable");out.innerHTML='<div class="label" style="margin:0 0 8px">SEARCH RESULTS</div>'+newsCard(d)}catch(e){out.innerHTML='<div class="card empty">Could not load news: '+esc(e.message||"Provider error")+'</div>'}
 }
 
+function summaryPage(){
+  return '<div class="grid two"><div class="card"><h2>AI PDF Document Summary</h2><p class="muted">Upload an earnings transcript, investor presentation or other PDF and get a concise investor-focused summary instead of reading the entire document.</p><div class="field" style="margin-top:12px"><label>Company / stock (optional)</label><input class="input wide" id="summaryCompany" placeholder="e.g. TCS"></div><div class="field" style="margin-top:10px"><label>PDF document</label><input class="input wide" id="summaryFile" type="file" accept=".pdf,application/pdf"></div><div class="notice" style="margin-top:10px">PDFs are processed for the summary through the AI service. Do not upload confidential documents you are not authorized to share.</div><div class="modalfoot"><button class="btn primary" id="summarizePdf">✦ Summarise PDF</button></div></div><div class="card"><h2>What you get</h2><div class="insights"><div class="insight">📌 Executive summary</div><div class="insight">📊 Financial performance</div><div class="insight">🗣️ Management commentary</div><div class="insight">🎯 Guidance & outlook</div><div class="insight">⚠️ Key risks</div><div class="insight">🔎 What to monitor next</div></div></div></div><div id="summaryResult" style="margin-top:12px"><div class="card empty">Choose a PDF to generate its summary.</div></div>';
+}
+async function summarizePdf(){
+  const file=$("summaryFile")?.files?.[0],out=$("summaryResult");if(!file||!out)return alert("Please select a PDF first.");
+  if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf"))return alert("Please select a PDF file.");
+  if(file.size>50*1024*1024)return alert("Please use a PDF under 50 MB.");
+  out.innerHTML='<div class="card empty">Uploading and analysing '+esc(file.name)+'…<br><span class="muted">Large earnings transcripts can take a little time.</span></div>';
+  try{
+    const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error("Could not read PDF"));r.readAsDataURL(file)});
+    const r=await fetch("/api/summarize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,fileData:data,company:$("summaryCompany")?.value||""})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||d.detail||"Summary failed");
+    const html=esc(d.summary||"").replace(/\\n/g,"<br>");
+    out.innerHTML='<div class="card"><div class="head" style="margin:0 0 10px"><div><h2>AI Summary</h2><div class="muted">'+esc(d.company||"")+' · '+esc(d.filename||file.name)+'</div></div><span class="pill">AI</span></div><div style="line-height:1.7;font-size:13px">'+html+'</div><div class="notice" style="margin-top:14px">AI-generated summary. Verify important financial figures against the original filing/transcript before making decisions.</div></div>';
+  }catch(e){out.innerHTML='<div class="card empty">Could not generate summary: '+esc(e.message||"Unknown error")+'</div>'}
+}
+
 function goalsPage(){
   const pv=totals().value;
   return'<div class="head"><h2>Financial goals</h2><button class="btn primary" id="goal">Add goal</button></div><div class="grid three">'+(s.goals.length?s.goals.map(g=>{const current=g.linkPortfolio===false?Number(g.current)||0:pv,p=g.target?Math.min(100,current/g.target*100):0,months=g.date?Math.max(1,Math.ceil((new Date(g.date)-new Date())/(30.44*86400000))):1,need=Math.max(0,(Number(g.target)||0-current)/months);return'<div class="card"><div class="row"><b>'+esc(g.name)+'</b><span class="muted">'+esc(g.date||"No date")+'</span></div><div class="big">'+money(current)+'</div><div class="muted">of '+money(g.target)+'</div><div class="progress"><i style="width:'+p+'%"></i></div><div class="row muted" style="margin-top:7px"><span>'+p.toFixed(1)+'%</span><span>'+money(Math.max(0,g.target-current))+' remaining</span></div><div class="notice" style="margin-top:10px">Required monthly: <b>'+money(need)+'</b><br>Planned monthly: <b>'+money(g.monthlyContribution||0)+'</b></div></div>'}).join(""):'<div class="card empty">Create a goal such as a ₹10 lakh portfolio, car fund or emergency fund.</div>')+'</div>'
@@ -396,8 +413,8 @@ function openGoal(){
 
 function setupAutoRefresh(){if(autoRefreshTimer){clearInterval(autoRefreshTimer);autoRefreshTimer=null}if(!s.settings.market.autoRefresh)return;autoRefreshTimer=setInterval(async()=>{if(locked||document.hidden)return;try{await refreshQuotes(true)}catch(e){console.warn("Auto refresh failed",e)}},Math.max(15,Number(s.settings.market.autoRefreshSeconds)||60)*1000)}
 function render(){
-  const pages={dashboard:dashboard,holdings:holdingsPage,sips:sipsPage,transactions:transactionsPage,realized:realizedPage,research:researchPage,news:newsPage,goals:goalsPage,import:importPage,settings:settingsPage};
-  const titles={dashboard:"Dashboard",holdings:"Holdings",sips:"Mutual Fund SIPs",transactions:"Transactions",realized:"Realised P/L",research:"Stock Research",news:"News & Events",goals:"Goals",import:"CSV Import",settings:"Settings / Data"};
+  const pages={dashboard:dashboard,holdings:holdingsPage,sips:sipsPage,transactions:transactionsPage,realized:realizedPage,research:researchPage,news:newsPage,summary:summaryPage,goals:goalsPage,import:importPage,settings:settingsPage};
+  const titles={dashboard:"Dashboard",holdings:"Holdings",sips:"Mutual Fund SIPs",transactions:"Transactions",realized:"Realised P/L",research:"Stock Research",news:"News & Events",summary:"AI PDF Summary",goals:"Goals",import:"CSV Import",settings:"Settings / Data"};
   $("title").textContent=titles[page];document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));$("view").innerHTML=pages[page]();
   if($("autolock"))$("autolock").value=String(s.settings.privacy.autoLockMinutes||30);
   if(page==="news")loadPortfolioNews();
@@ -417,6 +434,7 @@ document.addEventListener("click",e=>{
   if(e.target.id==="goal")openGoal();
   if(e.target.id==="researchRun")runResearch();
   if(e.target.id==="newsRun")runNews();
+  if(e.target.id==="summarizePdf")summarizePdf();
   if(e.target.id==="newsPortfolioRefresh")loadPortfolioNews();
   if(e.target.dataset.newsSymbol){page="news";render();runNews(e.target.dataset.newsSymbol)}
   if(e.target.id==="close")closeModal();
