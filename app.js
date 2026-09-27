@@ -1,13 +1,11 @@
 "use strict";
 (async function(){
   try{
-    const [a,b] = await Promise.all([
-      fetch("/app.p1.txt").then(r=>{if(!r.ok)throw new Error("p1");return r.text()}),
-      fetch("/app.p2.txt").then(r=>{if(!r.ok)throw new Error("p2");return r.text()})
-    ]);
-    (0,eval)(a+b);
+    const urls = ["/app.part0.txt","/app.part1.txt","/app.part2.txt","/app.part3.txt"];
+    const parts = await Promise.all(urls.map(u=>fetch(u).then(r=>{if(!r.ok)throw new Error(u);return r.text()})));
+    (0,eval)(parts.join(""));
   }catch(e){
-    document.body.innerHTML='<pre style="color:#ef8d8d;padding:20px">Failed to load app: '+e+'</pre>';
+    document.body.innerHTML='<pre style="color:#ef8d8d;padding:20px">Failed to load app: '+e+'\nHard-refresh or restore app.js from git history e588f66.</pre>';
     console.error(e);
   }
 })();
