@@ -1,12 +1,12 @@
 "use strict";
 (async function(){
   try{
-    const urls=['/b64.0.txt', '/b64.1.txt', '/b64.2.txt', '/b64.3.txt', '/b64.4.txt', '/b64.5.txt', '/b64.6.txt', '/b64.7.txt'];
+    const urls=['/chunk0.js', '/chunk1.js', '/chunk2.js', '/chunk3.js', '/chunk4.js', '/chunk5.js', '/chunk6.js', '/chunk7.js', '/chunk8.js', '/chunk9.js', '/chunk10.js', '/chunk11.js', '/chunk12.js'];
     const parts=await Promise.all(urls.map(u=>fetch(u).then(r=>{if(!r.ok)throw new Error(u);return r.text()})));
-    const code=atob(parts.join(""));
-    (0,eval)(code);
+    (0,eval)(parts.join(""));
   }catch(e){
-    document.body.innerHTML='<pre style="color:#ef8d8d;padding:20px">Failed to load app: '+e+'</pre>';
+    document.body.innerHTML='<pre style="color:#ef8d8d;padding:20px;font:14px system-ui">Failed to load app: '+e+
+      '\n\nQuick fix: open GitHub → app.js → restore from commit e588f66</pre>';
     console.error(e);
   }
 })();
