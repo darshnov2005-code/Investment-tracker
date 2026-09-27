@@ -23,6 +23,14 @@
   .main{padding-bottom:72px}
   .toast{bottom:80px}
 }
+.btn.primary:active{transform:scale(.98)}
+.card{transition:border-color .15s}
+.card:hover{border-color:#314255}
+.bottomnav button.active{color:var(--green)}
+.modal{animation:pop .18s ease}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.table tbody tr:hover{background:#141d27}
+.wide{width:100%}
 @media(max-width:900px){.side{inset:0 0 auto 0;width:100%;height:auto;display:flex;align-items:center;justify-content:space-between;padding:9px 10px}.nav{display:flex;overflow:auto;gap:3px}.nav button{white-space:nowrap;padding:9px 10px}.main{margin-left:0;padding:72px 12px 20px}.stats,.three{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}.insights{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){body{font-size:13px}.main{padding:68px 9px 18px}.top{position:sticky;top:48px;z-index:10;background:#0a0e13ee;padding:8px 0;margin:0 0 10px}.top h1{font-size:22px}.actions .btn{font-size:11px;padding:8px}.stats,.three,.form,.insights{grid-template-columns:1fr}.card{padding:13px}.table{min-width:900px}.head{margin-top:17px}.modal{padding:15px}.search .input,.search .select{min-width:0;flex:1}}
 </style></head><body>
@@ -38,4 +46,4 @@
   <button data-page="settings"><b>⚙</b>More</button>
 </nav>
 <div id="lockscreen" class="lockscreen hidden"><div class="lockcard"><div class="logo" style="margin:0 auto 12px">₹</div><h2>Portfolio locked</h2><p class="muted">Enter your local PIN to unlock this browser.</p><input id="unlockPin" class="input wide" type="password" inputmode="numeric" maxlength="8" placeholder="PIN"><div style="margin-top:10px"><button class="btn primary wide" id="unlockBtn">Unlock</button></div><div id="unlockMsg" class="muted" style="margin-top:8px"></div></div></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script src="/app.js" defer></script></body></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script src="/app.js" defer></script><script src="/ui.js" defer></script></body></html>
