@@ -65,12 +65,33 @@ export default async function handler(req, res) {
       const r = await fetch("https://www.amfiindia.com/spages/NAVAll.txt", { headers });
       if (!r.ok) throw new Error("AMFI HTTP " + r.status);
       const text = await r.text();
-      const row = text.split(/\r?\n/).find(x => { const c=x.split(";").map(v=>v.trim()); return c[0]===symbol || c[1]===symbol || c[2]===symbol; });
+      const row = text.split(/\r?\n/).find(x => {
+        const c = x.split(";").map(v => v.trim());
+        return c[0] === symbol || c[1] === symbol || c[2] === symbol;
+      });
       if (!row) return res.status(404).json({ error: "AMFI scheme code not found", symbol });
+
       const cols = row.split(";").map(v => v.trim());
-      const p = Number(cols[4]);
-      if (!Number.isFinite(p)) throw new Error("Invalid AMFI NAV");
-      return res.status(200).json({ symbol, exchange: "AMFI", price: p, currency: "INR", source: "AMFI" });
+      // Support both formats:
+      // 6-col: code, ISIN, ISIN-reinvest, name, NAV, date
+      // 8-col: code, ISIN, ISIN-reinvest, name, plan, option, NAV, date
+      let p;
+      if (cols.length >= 8) {
+        p = Number(cols[6]);
+      } else if (cols.length >= 6) {
+        p = Number(cols[4]);
+      } else {
+        throw new Error("Unexpected AMFI row format");
+      }
+      if (!Number.isFinite(p) || p <= 0) throw new Error("Invalid AMFI NAV");
+
+      return res.status(200).json({
+        symbol,
+        exchange: "AMFI",
+        price: p,
+        currency: "INR",
+        source: "AMFI"
+      });
     }
 
     return res.status(400).json({ error: "Unsupported exchange. Use NSE, BSE or AMFI." });
