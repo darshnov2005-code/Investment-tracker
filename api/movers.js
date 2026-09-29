@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  const minMove = Math.max(3, Math.min(20, Number(req.query.minMove) || 5));
+  const minMove = Math.max(2, Math.min(20, Number(req.query.minMove) || 5));
   const headers = {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     return parts.filter(Boolean).join("; ");
   }
 
-  async function nseIndexMovers(indexName, universe) {
+  async function nseIndexAll(indexName, universe) {
     let cookie = "";
     try {
       cookie = await nseSession();
@@ -53,8 +53,8 @@ export default async function handler(req, res) {
       if (!symbol || symbol.includes("NIFTY") || symbol.includes("SENSEX")) continue;
       const changePct = num(row.pChange ?? row.percentChange ?? row.perChange);
       const price = num(row.last ?? row.lastPrice ?? row.close);
-      const volume = num(row.totalTradedVolume ?? row.volume ?? row.totalTradedValue);
-      if (changePct == null || Math.abs(changePct) < minMove) continue;
+      const volume = num(row.totalTradedVolume ?? row.volume);
+      if (changePct == null || price == null) continue;
       out.push({
         symbol,
         name: row.meta?.companyName || row.symbol || symbol,
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
     return out;
   }
 
-  async function chartinkMovers() {
+  async function chartinkScan(clause, universe) {
     const hBase = {
       ...headers,
       Accept: "text/html,application/xhtml+xml,application/json,text/plain,*/*",
@@ -88,7 +88,6 @@ export default async function handler(req, res) {
       .map(x => x.split(";")[0].trim())
       .filter(Boolean)
       .join("; ");
-
     const h = {
       ...headers,
       Accept: "application/json, text/javascript, */*; q=0.01",
@@ -98,12 +97,6 @@ export default async function handler(req, res) {
       ...(cookie ? { Cookie: cookie } : {}),
       ...(csrf ? { "X-CSRF-TOKEN": csrf } : {})
     };
-
-    const clause =
-      "( {33489} ( ( abs( ( latest close - 1 day ago close ) / 1 day ago close * 100 ) >= " +
-      minMove +
-      " ) and latest volume > latest sma( volume , 20 ) * 1.5 and latest close > 10 ) )";
-
     const r = await fetch("https://chartink.com/screener/process", {
       method: "POST",
       headers: h,
@@ -118,7 +111,6 @@ export default async function handler(req, res) {
       throw new Error("Chartink non-JSON");
     }
     if (!Array.isArray(d.data)) throw new Error(d.message || "Chartink no data");
-
     return d.data
       .map(x => {
         const changePct = num(x.per_chg);
@@ -131,68 +123,92 @@ export default async function handler(req, res) {
           changePct,
           volume: vol,
           volumeRatio: vol && avg ? vol / avg : null,
-          universe: "Nifty 500",
+          universe,
           source: "Chartink"
         };
       })
-      .filter(x => x.symbol && x.changePct != null && Math.abs(x.changePct) >= minMove);
+      .filter(x => x.symbol && x.changePct != null);
   }
 
-  function mergeRank(lists) {
+  function merge(lists) {
     const map = new Map();
     for (const list of lists) {
       for (const s of list) {
-        const key = s.symbol;
-        if (!key) continue;
-        const prev = map.get(key);
-        if (!prev || Math.abs(s.changePct) > Math.abs(prev.changePct)) {
-          map.set(key, s);
-        } else if (prev && s.volumeRatio && !prev.volumeRatio) {
-          map.set(key, { ...prev, volumeRatio: s.volumeRatio, volume: s.volume || prev.volume });
+        if (!s.symbol) continue;
+        const prev = map.get(s.symbol);
+        if (!prev) {
+          map.set(s.symbol, s);
+          continue;
         }
+        const prefer =
+          Math.abs(s.changePct || 0) > Math.abs(prev.changePct || 0) ? s : prev;
+        const other = prefer === s ? prev : s;
+        map.set(s.symbol, {
+          ...prefer,
+          volumeRatio: prefer.volumeRatio ?? other.volumeRatio,
+          volume: prefer.volume ?? other.volume,
+          universe: prefer.universe || other.universe
+        });
       }
     }
-    return [...map.values()].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
+    return [...map.values()];
   }
 
   try {
-    const nseResults = await Promise.allSettled([
-      nseIndexMovers("NIFTY 50", "Nifty 50"),
-      nseIndexMovers("NIFTY NEXT 50", "Nifty Next 50"),
-      nseIndexMovers("NIFTY MIDCAP 150", "Nifty Midcap 150"),
-      nseIndexMovers("NIFTY 500", "Nifty 500")
+    const nseSettled = await Promise.allSettled([
+      nseIndexAll("NIFTY 50", "Nifty 50"),
+      nseIndexAll("NIFTY NEXT 50", "Nifty Next 50"),
+      nseIndexAll("NIFTY MIDCAP 150", "Nifty Midcap 150"),
+      nseIndexAll("NIFTY 500", "Nifty 500")
     ]);
-    const fromNse = nseResults
+    const fromNse = nseSettled
       .filter(x => x.status === "fulfilled")
       .flatMap(x => x.value);
 
     let fromChartink = [];
     try {
-      fromChartink = await chartinkMovers();
+      const clause =
+        "( {33489} ( abs( ( latest close - 1 day ago close ) / 1 day ago close * 100 ) >= " +
+        minMove +
+        " and latest volume > latest sma( volume , 20 ) * 1.5 and latest close > 10 ) )";
+      fromChartink = await chartinkScan(clause, "Nifty 500");
     } catch (_) {
       fromChartink = [];
     }
 
-    const merged = mergeRank([fromNse, fromChartink]);
-    const withVol = merged.filter(
-      x => x.volumeRatio == null || x.volumeRatio >= 1.5
-    );
+    let volSpikes = [];
+    try {
+      const clause2 =
+        "( {33489} ( latest volume > latest sma( volume , 20 ) * 2 and abs( ( latest close - 1 day ago close ) / 1 day ago close * 100 ) >= 2 and latest close > 10 ) )";
+      volSpikes = await chartinkScan(clause2, "Nifty 500");
+    } catch (_) {}
 
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=180");
+    const all = merge([fromNse, fromChartink, volSpikes]);
+    all.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
+
+    const hot = all.filter(x => {
+      const big = Math.abs(x.changePct) >= minMove;
+      const volOk = x.volumeRatio == null || x.volumeRatio >= 1.5;
+      return big && volOk;
+    });
+
+    res.setHeader("Cache-Control", "s-maxage=45, stale-while-revalidate=120");
     return res.status(200).json({
       fetchedAt: new Date().toISOString(),
       minMove,
       criteria: {
-        price: "Absolute day move ≥ " + minMove + "% (10%+ highlighted)",
-        volume: "Volume ≥ 1.5× 20-day average when Chartink data available",
+        price: "Highlight ≥" + minMove + "% day move; 10%+ tagged",
+        volume: "Prefer volume ≥ 1.5× 20DMA when available",
         universe: "Nifty 50, Next 50, Midcap 150, Nifty 500"
       },
       counts: {
-        total: merged.length,
-        move10: merged.filter(x => Math.abs(x.changePct) >= 10).length,
-        move5: merged.filter(x => Math.abs(x.changePct) >= minMove && Math.abs(x.changePct) < 10).length
+        scanned: all.length,
+        hot: hot.length,
+        move10: hot.filter(x => Math.abs(x.changePct) >= 10).length,
+        move5: hot.filter(x => Math.abs(x.changePct) >= minMove && Math.abs(x.changePct) < 10).length
       },
-      movers: withVol.length ? withVol.slice(0, 40) : merged.slice(0, 40)
+      movers: hot.slice(0, 40),
+      topMovers: all.slice(0, 20)
     });
   } catch (e) {
     return res.status(502).json({

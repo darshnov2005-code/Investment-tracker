@@ -16,37 +16,52 @@
     return fmt(n, 0);
   }
 
+  function tableRows(list) {
+    return '<div class="tablewrap"><table class="table"><thead><tr><th>Stock</th><th>Move</th><th>Price</th><th>Volume</th><th>Universe</th><th></th></tr></thead><tbody>' +
+      list.map(function (x) {
+        var up = x.changePct >= 0;
+        var abs = Math.abs(x.changePct);
+        var cls = up ? "green" : "red";
+        var badge = abs >= 10
+          ? ' <span class="pill" style="background:#3a2a12;color:var(--amber)">10%+</span>'
+          : abs >= 5
+            ? ' <span class="pill">5%+</span>'
+            : "";
+        var volExtra = x.volumeRatio != null ? (" · " + x.volumeRatio.toFixed(1) + "× avg") : "";
+        return '<tr><td><div class="asset">' + esc(x.name || x.symbol) + badge + '</div><div class="sub">' + esc(x.symbol) + '</div></td>' +
+          '<td class="' + cls + '"><b>' + (up ? "+" : "") + fmt(x.changePct, 2) + "%</b></td>" +
+          "<td>" + fmt(x.price, 2) + "</td>" +
+          "<td>" + fmtVol(x.volume) + '<div class="sub">' + esc(volExtra) + "</div></td>" +
+          '<td class="muted">' + esc(x.universe || "") + "</td>" +
+          '<td><button class="btn" data-movers-research="' + esc(x.symbol) + '">Research</button></td></tr>';
+      }).join("") + "</tbody></table></div>";
+  }
+
   function moversHTML(data, loading) {
     if (loading) {
-      return '<div class="card" data-movers-panel="1" style="margin-top:12px"><div class="head" style="margin:0 0 8px"><h2 style="margin:0">Hot movers (price + volume)</h2></div><div class="card empty">Scanning Nifty 50 / Next 50 / Midcap / 500…</div></div>';
+      return '<div class="card" data-movers-panel="1" style="margin-top:12px"><div class="head" style="margin:0 0 8px"><h2 style="margin:0">Hot movers (price + volume)</h2></div><div class="empty">Scanning Nifty 50 / Next 50 / Midcap / 500…</div></div>';
     }
-    var list = (data && data.movers) || [];
-    var body;
-    if (!list.length) {
-      body = '<div class="muted" style="padding:8px 0">No names currently showing ≥5% day move with volume confirmation in the scanned universe.</div>';
-    } else {
-      body = '<div class="tablewrap"><table class="table"><thead><tr><th>Stock</th><th>Move</th><th>Price</th><th>Volume</th><th>Universe</th><th></th></tr></thead><tbody>' +
-        list.map(function (x) {
-          var up = x.changePct >= 0;
-          var big = Math.abs(x.changePct) >= 10;
-          var cls = up ? "green" : "red";
-          var badge = big ? ' <span class="pill" style="background:#3a2a12;color:var(--amber)">10%+</span>' : "";
-          var volExtra = x.volumeRatio != null ? (' · ' + x.volumeRatio.toFixed(1) + '× avg') : "";
-          return '<tr><td><div class="asset">' + esc(x.name || x.symbol) + badge + '</div><div class="sub">' + esc(x.symbol) + '</div></td>' +
-            '<td class="' + cls + '"><b>' + (up ? "+" : "") + fmt(x.changePct, 2) + '%</b></td>' +
-            '<td>' + fmt(x.price, 2) + '</td>' +
-            '<td>' + fmtVol(x.volume) + '<div class="sub">' + esc(volExtra) + '</div></td>' +
-            '<td class="muted">' + esc(x.universe || "") + '</td>' +
-            '<td><button class="btn" data-movers-research="' + esc(x.symbol) + '">Research</button></td></tr>';
-        }).join("") + '</tbody></table></div>';
+    var hot = (data && data.movers) || [];
+    var top = (data && data.topMovers) || [];
+    var body = "";
+    if (hot.length) {
+      body += '<div class="label" style="margin:8px 0 6px">Hot (≥5% move' +
+        (data.counts && data.counts.move10 ? " · " + data.counts.move10 + " at 10%+" : "") +
+        ")</div>" + tableRows(hot);
+    }
+    if (top.length) {
+      body += '<div class="label" style="margin:14px 0 6px">Top day movers in universe</div>' + tableRows(top);
+    }
+    if (!hot.length && !top.length) {
+      body = '<div class="muted" style="padding:8px 0">No mover data right now (market closed or feeds unavailable). Try Refresh after market open.</div>';
     }
     var crit = data && data.criteria
-      ? '<div class="muted" style="margin-bottom:8px">' + esc(data.criteria.price) + ' · ' + esc(data.criteria.volume) + ' · ' + esc(data.criteria.universe) + '</div>'
-      : '';
+      ? '<div class="muted" style="margin-bottom:8px">' + esc(data.criteria.price) + " · " + esc(data.criteria.volume) + " · " + esc(data.criteria.universe) + "</div>"
+      : "";
     return '<div class="card" data-movers-panel="1" style="margin-top:12px">' +
       '<div class="head" style="margin:0 0 8px"><div><h2 style="margin:0">Hot movers (price + volume)</h2>' +
       '<div class="muted">Large day moves with rising volume — Nifty 50, Next 50, Midcap 150, Nifty 500</div></div>' +
-      '<button class="btn" id="moversRefresh">↻ Refresh</button></div>' + crit + body + '</div>';
+      '<button class="btn" id="moversRefresh">↻ Refresh</button></div>' + crit + body + "</div>";
   }
 
   async function loadMovers(force) {
@@ -72,7 +87,7 @@
       if (panel && tmp.firstChild) panel.replaceWith(tmp.firstChild);
     } catch (e) {
       var p = view.querySelector("[data-movers-panel]");
-      if (p) p.innerHTML = '<div class="head"><h2 style="margin:0">Hot movers</h2></div><div class="empty">Could not load movers: ' + esc(e.message || "error") + '</div>';
+      if (p) p.innerHTML = '<div class="head"><h2 style="margin:0">Hot movers</h2></div><div class="empty">Could not load movers: ' + esc(e.message || "error") + "</div>";
     }
   }
 
