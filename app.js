@@ -9,12 +9,15 @@
     if (!code || code.length < 1000 || code.indexOf("PLACEHOLDER") === 0)
       throw new Error("Bad app payload");
     (0, eval)(code);
+    var s = document.createElement("script");
+    s.src = "/enhance.js";
+    s.defer = true;
+    document.body.appendChild(s);
   } catch (e) {
     document.body.innerHTML =
       '<pre style="color:#ef8d8d;padding:24px;font:14px system-ui;max-width:560px;margin:40px auto;line-height:1.5">' +
       "Failed to load app: " +
       e +
-      "\n\nRestore locally:\n  git checkout e588f66 -- app.js && git commit -am restore && git push" +
       "</pre>";
     console.error(e);
   }
