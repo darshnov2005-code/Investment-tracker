@@ -94,28 +94,40 @@
       '<div class="muted">From your cost, P/L, concentration and day move. Not personalised advice.</div></div></div>' + body + '</div>';
   }
 
-  async function loadIndicesInto(view) {
-    if (view.querySelector("[data-indices-panel]")) return;
-    var ph = document.createElement("div");
-    ph.innerHTML = '<div class="grid three" data-indices-panel="1" style="margin-bottom:12px"><div class="card empty">Loading Nifty / Sensex / Bank Nifty…</div></div>';
-    view.insertBefore(ph.firstChild, view.firstChild);
+  function indicesCardsHTML(data, loading) {
+    if (loading || !(data && data.indices && data.indices.length)) {
+      return '<div class="grid three" data-indices-panel="1" style="margin-bottom:12px"><div class="card empty">Loading Nifty / Sensex / Bank Nifty…</div></div>';
+    }
+    return '<div class="grid three" data-indices-panel="1" style="margin-bottom:12px">' +
+      (data.indices || []).map(function (x) {
+        var up = x.change != null && x.change >= 0;
+        var cls = x.change == null ? "" : (up ? "green" : "red");
+        var ch = x.change == null ? "—" :
+          ((up ? "+" : "") + fmtIdx(x.change) + " (" + (up ? "+" : "") +
+            (x.changePct != null ? x.changePct.toFixed(2) : "—") + "%)");
+        return '<div class="card"><div class="label">' + esc(x.label) + '</div><div class="big ' + cls + '">' +
+          fmtIdx(x.price) + '</div><div class="sub ' + cls + '">' + ch + '</div><div class="sub">' + esc(x.source || "") + '</div></div>';
+      }).join("") + '</div>';
+  }
+
+  async function loadIndicesInto(view, force) {
+    if (!view) return;
+    var existing = view.querySelector("[data-indices-panel]");
+    if (existing && !force) return;
+    if (!existing) {
+      var ph = document.createElement("div");
+      ph.innerHTML = indicesCardsHTML(null, true);
+      if (ph.firstChild) view.insertBefore(ph.firstChild, view.firstChild);
+    } else if (force) {
+      existing.outerHTML = indicesCardsHTML(null, true);
+    }
     try {
-      var r = await fetch("/api/indices");
+      var r = await fetch("/api/indices?t=" + Date.now());
       var d = await r.json();
       if (!r.ok) throw new Error("fail");
-      var html = '<div class="grid three" data-indices-panel="1" style="margin-bottom:12px">' +
-        (d.indices || []).map(function (x) {
-          var up = x.change != null && x.change >= 0;
-          var cls = x.change == null ? "" : (up ? "green" : "red");
-          var ch = x.change == null ? "—" :
-            ((up ? "+" : "") + fmtIdx(x.change) + " (" + (up ? "+" : "") +
-              (x.changePct != null ? x.changePct.toFixed(2) : "—") + "%)");
-          return '<div class="card"><div class="label">' + esc(x.label) + '</div><div class="big ' + cls + '">' +
-            fmtIdx(x.price) + '</div><div class="sub ' + cls + '">' + ch + '</div><div class="sub">' + esc(x.source || '') + '</div></div>';
-        }).join("") + '</div>';
       var panel = view.querySelector("[data-indices-panel]");
       var tmp = document.createElement("div");
-      tmp.innerHTML = html;
+      tmp.innerHTML = indicesCardsHTML(d, false);
       if (panel && tmp.firstChild) panel.replaceWith(tmp.firstChild);
     } catch (_) {
       var p = view.querySelector("[data-indices-panel]");
@@ -127,7 +139,7 @@
     var view = document.getElementById("view");
     var title = (document.getElementById("title") || {}).textContent || "";
     if (!view || title.indexOf("Dashboard") !== 0) return;
-    loadIndicesInto(view);
+    loadIndicesInto(view, false);
     if (!view.querySelector("[data-review-panel]")) {
       var wrap = document.createElement("div");
       wrap.innerHTML = reviewHTML();
@@ -207,7 +219,6 @@
     "BAJFINANCE","ASIANPAINT","MARUTI","SUNPHARMA","TITAN","WIPRO","AXISBANK","KOTAKBANK","NTPC","POWERGRID"
   ];
 
-  // Same rules as core app signal() — stays in sync with Stock Research
   function computeSignal(d) {
     var p = d.price || {};
     var f = d.financialData || {};
@@ -298,6 +309,16 @@
 
   document.addEventListener("click", function (e) {
     if (e.target && e.target.id === "ideasRefresh") runIdeas();
+    if (e.target && (e.target.id === "refresh" || (e.target.closest && e.target.closest("#refresh")))) {
+      var view = document.getElementById("view");
+      var title = (document.getElementById("title") || {}).textContent || "";
+      if (view && title.indexOf("Dashboard") === 0) {
+        loadIndicesInto(view, true);
+        var oldRev = view.querySelector("[data-review-panel]");
+        if (oldRev) oldRev.remove();
+        injectDashboard();
+      }
+    }
     var res = e.target.closest && e.target.closest("[data-ideas-research]");
     if (res) {
       var sym = res.getAttribute("data-ideas-research");
