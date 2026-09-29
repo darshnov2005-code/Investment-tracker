@@ -9,7 +9,7 @@
     if (!code || code.length < 1000 || code.indexOf("PLACEHOLDER") === 0)
       throw new Error("Bad app payload");
     (0, eval)(code);
-    ["/signals-ui.js", "/ui.js"].forEach(function (src) {
+    ["/signals-ui.js", "/movers-ui.js", "/ui.js"].forEach(function (src) {
       var s = document.createElement("script");
       s.src = src;
       s.defer = true;
