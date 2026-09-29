@@ -1,4 +1,5 @@
 "use strict";
+/* Hot movers as its own page (not on Dashboard) */
 (function () {
   function esc(x) {
     var d = document.createElement("div");
@@ -37,13 +38,22 @@
       }).join("") + "</tbody></table></div>";
   }
 
-  function moversHTML(data, loading) {
-    if (loading) {
-      return '<div class="card" data-movers-panel="1" style="margin-top:12px"><div class="head" style="margin:0 0 8px"><h2 style="margin:0">Hot movers (price + volume)</h2></div><div class="empty">Scanning Nifty 50 / Next 50 / Midcap / 500…</div></div>';
-    }
+  function pageShell(inner) {
+    return '<div class="card"><div class="head" style="margin:0 0 10px"><div><h2 style="margin:0">Hot movers (price + volume)</h2>' +
+      '<div class="muted">Nifty 50, Next 50, mid/large focus — 5% / 10% jumps with volume when available</div></div>' +
+      '<button class="btn primary" id="moversRefresh">↻ Scan now</button></div>' +
+      '<div class="notice">Not trade recommendations. Large moves can reverse quickly.</div></div>' +
+      '<div id="moversBody" style="margin-top:12px">' + inner + "</div>";
+  }
+
+  function renderData(data) {
     var hot = (data && data.movers) || [];
     var top = (data && data.topMovers) || [];
     var body = "";
+    var crit = data && data.criteria
+      ? '<div class="muted" style="margin-bottom:8px">' + esc(data.criteria.price) + " · " + esc(data.criteria.volume) + " · " + esc(data.criteria.universe) + "</div>"
+      : "";
+    body += crit;
     if (hot.length) {
       body += '<div class="label" style="margin:8px 0 6px">Hot (≥5% move' +
         (data.counts && data.counts.move10 ? " · " + data.counts.move10 + " at 10%+" : "") +
@@ -53,51 +63,53 @@
       body += '<div class="label" style="margin:14px 0 6px">Top day movers in universe</div>' + tableRows(top);
     }
     if (!hot.length && !top.length) {
-      body = '<div class="muted" style="padding:8px 0">No mover data right now (market closed or feeds unavailable). Try Refresh after market open.</div>';
+      body += '<div class="card empty">No mover data right now. Try again after market open.</div>';
     }
-    var crit = data && data.criteria
-      ? '<div class="muted" style="margin-bottom:8px">' + esc(data.criteria.price) + " · " + esc(data.criteria.volume) + " · " + esc(data.criteria.universe) + "</div>"
-      : "";
-    return '<div class="card" data-movers-panel="1" style="margin-top:12px">' +
-      '<div class="head" style="margin:0 0 8px"><div><h2 style="margin:0">Hot movers (price + volume)</h2>' +
-      '<div class="muted">Large day moves with rising volume — Nifty 50, Next 50, Midcap 150, Nifty 500</div></div>' +
-      '<button class="btn" id="moversRefresh">↻ Refresh</button></div>' + crit + body + "</div>";
+    return body;
   }
 
-  async function loadMovers(force) {
-    var view = document.getElementById("view");
-    var title = (document.getElementById("title") || {}).textContent || "";
-    if (!view || title.indexOf("Dashboard") !== 0) return;
-    var existing = view.querySelector("[data-movers-panel]");
-    if (existing && !force) return;
-    if (!existing) {
-      var ph = document.createElement("div");
-      ph.innerHTML = moversHTML(null, true);
-      if (ph.firstChild) view.appendChild(ph.firstChild);
-    } else if (force) {
-      existing.outerHTML = moversHTML(null, true);
-    }
+  async function loadMovers() {
+    var box = document.getElementById("moversBody");
+    if (!box) return;
+    box.innerHTML = '<div class="card empty">Scanning universe…</div>';
     try {
       var r = await fetch("/api/movers?minMove=5&t=" + Date.now());
       var d = await r.json();
       if (!r.ok) throw new Error(d.error || "fail");
-      var panel = view.querySelector("[data-movers-panel]");
-      var tmp = document.createElement("div");
-      tmp.innerHTML = moversHTML(d, false);
-      if (panel && tmp.firstChild) panel.replaceWith(tmp.firstChild);
+      box.innerHTML = renderData(d);
     } catch (e) {
-      var p = view.querySelector("[data-movers-panel]");
-      if (p) p.innerHTML = '<div class="head"><h2 style="margin:0">Hot movers</h2></div><div class="empty">Could not load movers: ' + esc(e.message || "error") + "</div>";
+      box.innerHTML = '<div class="card empty">Could not load movers: ' + esc(e.message || "error") + "</div>";
     }
+  }
+
+  function showMoversPage() {
+    var titleEl = document.getElementById("title");
+    if (titleEl) titleEl.textContent = "Hot movers";
+    document.querySelectorAll(".nav button").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-page") === "movers");
+    });
+    var view = document.getElementById("view");
+    if (view) {
+      view.innerHTML = pageShell('<div class="card empty">Click <b>Scan now</b> to load movers.</div>');
+      loadMovers();
+    }
+  }
+
+  function ensureNav() {
+    var nav = document.querySelector(".side .nav");
+    if (!nav || nav.querySelector('[data-page="movers"]')) return;
+    var btn = document.createElement("button");
+    btn.setAttribute("data-page", "movers");
+    btn.innerHTML = "⚡ <span>Movers</span>";
+    var research = nav.querySelector('[data-page="research"]');
+    if (research) research.parentNode.insertBefore(btn, research);
+    else nav.appendChild(btn);
   }
 
   document.addEventListener("click", function (e) {
     if (e.target && e.target.id === "moversRefresh") {
-      loadMovers(true);
+      loadMovers();
       return;
-    }
-    if (e.target && (e.target.id === "refresh" || (e.target.closest && e.target.closest("#refresh")))) {
-      loadMovers(true);
     }
     var res = e.target.closest && e.target.closest("[data-movers-research]");
     if (res) {
@@ -111,22 +123,20 @@
         if (run) run.click();
       }, 80);
     }
+    var mbtn = e.target.closest && e.target.closest('[data-page="movers"]');
+    if (mbtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      showMoversPage();
+    }
   }, true);
 
   var tries = 0;
   var t = setInterval(function () {
     tries++;
-    var title = (document.getElementById("title") || {}).textContent || "";
-    if (document.getElementById("view") && title.indexOf("Dashboard") === 0) {
+    if (document.querySelector(".side .nav")) {
       clearInterval(t);
-      loadMovers(false);
+      ensureNav();
     } else if (tries > 80) clearInterval(t);
-  }, 200);
-
-  setInterval(function () {
-    var title = (document.getElementById("title") || {}).textContent || "";
-    if (title.indexOf("Dashboard") === 0 && !document.querySelector("[data-movers-panel]")) {
-      loadMovers(false);
-    }
-  }, 2500);
+  }, 150);
 })();
