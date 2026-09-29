@@ -111,7 +111,7 @@
             ((up ? "+" : "") + fmtIdx(x.change) + " (" + (up ? "+" : "") +
               (x.changePct != null ? x.changePct.toFixed(2) : "—") + "%)");
           return '<div class="card"><div class="label">' + esc(x.label) + '</div><div class="big ' + cls + '">' +
-            fmtIdx(x.price) + '</div><div class="sub ' + cls + '">' + ch + '</div></div>';
+            fmtIdx(x.price) + '</div><div class="sub ' + cls + '">' + ch + '</div><div class="sub">' + esc(x.source || '') + '</div></div>';
         }).join("") + '</div>';
       var panel = view.querySelector("[data-indices-panel]");
       var tmp = document.createElement("div");
@@ -207,6 +207,47 @@
     "BAJFINANCE","ASIANPAINT","MARUTI","SUNPHARMA","TITAN","WIPRO","AXISBANK","KOTAKBANK","NTPC","POWERGRID"
   ];
 
+  // Same rules as core app signal() — stays in sync with Stock Research
+  function computeSignal(d) {
+    var p = d.price || {};
+    var f = d.financialData || {};
+    var sd = d.summaryDetail || {};
+    var k = d.keyStats || {};
+    var score = 0;
+    var reasons = [];
+    function add(cond, pts, txt) {
+      if (cond) { score += pts; reasons.push(txt); }
+    }
+    var roe = Number(f.returnOnEquity);
+    var margin = Number(f.profitMargins);
+    var rev = Number(f.revenueGrowth);
+    var earn = Number(f.earningsGrowth);
+    var de = Number(f.debtToEquity);
+    var cr = Number(f.currentRatio);
+    var fc = Number(f.freeCashflow);
+    var pe = Number(sd.trailingPE || k.trailingPE);
+    var px = Number(p.regularMarketPrice);
+    var m50 = Number(p.fiftyDayAverage);
+    var m200 = Number(p.twoHundredDayAverage);
+    if (isFinite(roe)) { add(roe >= 0.15, 1, "ROE ≥ 15%"); add(roe < 0.08, -1, "ROE < 8%"); }
+    if (isFinite(margin)) { add(margin >= 0.10, 1, "Profit margin ≥ 10%"); add(margin < 0.05, -1, "Profit margin < 5%"); }
+    if (isFinite(rev)) { add(rev >= 0.10, 1, "Revenue growth ≥ 10%"); add(rev < 0, -1, "Revenue growth is negative"); }
+    if (isFinite(earn)) { add(earn >= 0.10, 1, "Earnings growth ≥ 10%"); add(earn < 0, -1, "Earnings growth is negative"); }
+    if (isFinite(de)) { add(de <= 75, 1, "Debt/equity ≤ 75%"); add(de > 150, -1, "Debt/equity > 150%"); }
+    if (isFinite(cr)) { add(cr >= 1, 1, "Current ratio ≥ 1"); add(cr < 0.75, -1, "Current ratio < 0.75"); }
+    if (isFinite(fc)) { add(fc > 0, 1, "Free cash flow positive"); add(fc < 0, -1, "Free cash flow negative"); }
+    if (isFinite(pe)) { add(pe > 0 && pe <= 25, 1, "P/E ≤ 25"); add(pe > 40, -1, "P/E > 40"); }
+    if (isFinite(px) && isFinite(m50) && isFinite(m200)) {
+      add(px > m50 && px > m200, 1, "Price above 50D and 200D");
+      add(px < m50 && px < m200, -1, "Price below 50D and 200D");
+    }
+    return {
+      score: score,
+      signal: score >= 5 ? "BUY" : score <= 1 ? "SELL" : "HOLD",
+      reasons: reasons.slice(0, 8)
+    };
+  }
+
   async function runIdeas() {
     var out = document.getElementById("ideasResult");
     if (!out) return;
@@ -223,7 +264,7 @@
           var r = await fetch("/api/research?symbol=" + encodeURIComponent(sym) + "&exchange=NSE");
           var d = await r.json();
           if (!r.ok) throw new Error(d.error || "fail");
-          var sg = typeof signal === "function" ? signal(d) : { score: 0, signal: "HOLD", reasons: [] };
+          var sg = computeSignal(d);
           return { sym: sym, d: d, sg: sg, held: !!held[sym] };
         } catch (e) {
           return { sym: sym, d: null, sg: { score: 0, signal: "—", reasons: [e.message || "Unavailable"] }, held: !!held[sym] };
