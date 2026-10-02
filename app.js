@@ -1,25 +1,15 @@
 "use strict";
 (async function () {
   try {
-    const parts = [];
-    for (let i = 0; i < 10; i++) {
-      const r = await fetch("/b64." + i + ".txt");
-      if (!r.ok) {
-        if (i === 0) throw new Error("HTTP " + r.status);
-        break;
-      }
-      parts.push((await r.text()).replace(/\s+/g, ""));
-    }
-    const b64 = parts.join("");
-    if (!b64 || b64.length < 1000) throw new Error("Bad app payload");
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const code = new TextDecoder("utf-8").decode(bytes);
+    const url =
+      "https://raw.githubusercontent.com/darshnov2005-code/Investment-tracker/e588f66ec899a2e79a131a2d1df7ecafe8c5cd79/app.js";
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const code = await r.text();
     if (!code || code.length < 1000 || code.indexOf("PLACEHOLDER") === 0)
       throw new Error("Bad app payload");
     (0, eval)(code);
-    ["/quote-fix.js", "/review-ui.js", "/movers-ui.js", "/ideas-ui.js", "/ui.js"].forEach(function (src) {
+    ["/quote-fix.js", "/review-ui.js", "/movers-ui.js", "/ideas-ui.js", "/ui.js", "/edit-installments.js"].forEach(function (src) {
       var s = document.createElement("script");
       s.src = src;
       s.defer = true;
