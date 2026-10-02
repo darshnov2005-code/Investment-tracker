@@ -17,10 +17,13 @@
       "/ui.js",
       "/edit-installments.js",
       "/news-dropdown.js",
-      "/notes-ui.js"
+      "/notes-ui.js",
+      "/watchlist-ui.js",
+      "/tx-filters.js",
+      "/holdings-sector.js"
     ].forEach(function (src) {
       var s = document.createElement("script");
-      s.src = src + "?v=7";
+      s.src = src + "?v=8";
       s.defer = true;
       document.body.appendChild(s);
     });
