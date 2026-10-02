@@ -10,6 +10,7 @@
     "api/indices.js": { "maxDuration": 15 },
     "api/sectors.js": { "maxDuration": 25 },
     "api/sector-stocks.js": { "maxDuration": 30 },
-    "api/week-performance.js": { "maxDuration": 30 }
+    "api/week-performance.js": { "maxDuration": 30 },
+    "api/mf-week.js": { "maxDuration": 45 }
   }
 }
