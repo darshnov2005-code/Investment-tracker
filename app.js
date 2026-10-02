@@ -1,9 +1,16 @@
 "use strict";
 (async function () {
   try {
-    const r = await fetch("/b64.0.txt");
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const b64 = (await r.text()).replace(/\s+/g, "");
+    const parts = [];
+    for (let i = 0; i < 10; i++) {
+      const r = await fetch("/b64." + i + ".txt");
+      if (!r.ok) {
+        if (i === 0) throw new Error("HTTP " + r.status);
+        break;
+      }
+      parts.push((await r.text()).replace(/\s+/g, ""));
+    }
+    const b64 = parts.join("");
     if (!b64 || b64.length < 1000) throw new Error("Bad app payload");
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
