@@ -8,6 +8,7 @@
     "api/summarize.js": {"maxDuration": 60},
     "api/movers.js": {"maxDuration": 30},
     "api/indices.js": {"maxDuration": 15},
-    "api/sectors.js": {"maxDuration": 25}
+    "api/sectors.js": {"maxDuration": 25},
+    "api/sector-stocks.js": {"maxDuration": 30}
   }
 }
