@@ -11,7 +11,7 @@
     (0, eval)(code);
     ["/quote-fix.js", "/review-ui.js", "/movers-ui.js", "/ideas-ui.js", "/ui.js", "/edit-installments.js"].forEach(function (src) {
       var s = document.createElement("script");
-      s.src = src + "?v=4";
+      s.src = src + "?v=5";
       s.defer = true;
       document.body.appendChild(s);
     });
