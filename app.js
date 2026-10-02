@@ -9,9 +9,9 @@
     if (!code || code.length < 1000 || code.indexOf("PLACEHOLDER") === 0)
       throw new Error("Bad app payload");
     (0, eval)(code);
-    ["/quote-fix.js", "/review-ui.js", "/movers-ui.js", "/ideas-ui.js", "/ui.js", "/edit-installments.js"].forEach(function (src) {
+    ["/quote-fix.js", "/review-ui.js", "/movers-ui.js", "/ideas-ui.js", "/ui.js", "/edit-installments.js", "/news-dropdown.js"].forEach(function (src) {
       var s = document.createElement("script");
-      s.src = src + "?v=5";
+      s.src = src + "?v=6";
       s.defer = true;
       document.body.appendChild(s);
     });
