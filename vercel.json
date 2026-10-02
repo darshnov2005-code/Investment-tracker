@@ -1,14 +1,15 @@
 {
   "version": 2,
   "functions": {
-    "api/quote.js": {"maxDuration": 10},
-    "api/research.js": {"maxDuration": 10},
-    "api/mf.js": {"maxDuration": 10},
-    "api/news.js": {"maxDuration": 10},
-    "api/summarize.js": {"maxDuration": 60},
-    "api/movers.js": {"maxDuration": 30},
-    "api/indices.js": {"maxDuration": 15},
-    "api/sectors.js": {"maxDuration": 25},
-    "api/sector-stocks.js": {"maxDuration": 30}
+    "api/quote.js": { "maxDuration": 10 },
+    "api/research.js": { "maxDuration": 10 },
+    "api/mf.js": { "maxDuration": 10 },
+    "api/news.js": { "maxDuration": 10 },
+    "api/summarize.js": { "maxDuration": 60 },
+    "api/movers.js": { "maxDuration": 30 },
+    "api/indices.js": { "maxDuration": 15 },
+    "api/sectors.js": { "maxDuration": 25 },
+    "api/sector-stocks.js": { "maxDuration": 30 },
+    "api/week-performance.js": { "maxDuration": 30 }
   }
 }
