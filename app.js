@@ -9,7 +9,7 @@
     if (!code || code.length < 1000 || code.indexOf("PLACEHOLDER") === 0)
       throw new Error("Bad app payload");
     (0, eval)(code);
-    [
+    var patches = [
       "/quote-fix.js",
       "/review-ui.js",
       "/movers-ui.js",
@@ -21,10 +21,13 @@
       "/watchlist-ui.js",
       "/tx-filters.js",
       "/holdings-sector.js",
-      "/weekly-review-ui.js"
-    ].forEach(function (src) {
+      "/weekly-review-ui.js",
+      "/visual-pro.js"
+    ];
+    var ver = "?v=14";
+    patches.forEach(function (src) {
       var s = document.createElement("script");
-      s.src = src + "?v=13";
+      s.src = src + ver;
       s.defer = true;
       document.body.appendChild(s);
     });
