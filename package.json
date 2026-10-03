@@ -1,0 +1,6 @@
+{
+  "name": "investment-tracker",
+  "private": true,
+  "type": "module",
+  "description": "InvestTrack — India portfolio tracker"
+}

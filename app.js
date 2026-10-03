@@ -24,7 +24,7 @@
       "/weekly-review-ui.js"
     ].forEach(function (src) {
       var s = document.createElement("script");
-      s.src = src + "?v=12";
+      s.src = src + "?v=13";
       s.defer = true;
       document.body.appendChild(s);
     });
