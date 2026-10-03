@@ -1,7 +1,7 @@
 "use strict";
 /**
  * DOM patch: SIP installment edit/delete + transaction edit
- * Also hides AI Summary remnants if core still exposes that page.
+ * Soft refresh after save (no full page reload when possible).
  */
 (function () {
   function $(id) { return document.getElementById(id); }
@@ -20,6 +20,24 @@
     st.meta = st.meta || {};
     st.meta.lastSavedAt = Date.now();
     localStorage.setItem("investtrack-v4", JSON.stringify(st));
+  }
+
+  function softRefresh() {
+    try {
+      localStorage.removeItem("investtrack-inv-cache-v1");
+      if (window.__invCache) window.__invCache = null;
+    } catch (e) {}
+    var active = document.querySelector(".nav button.active[data-page]");
+    var page = active && active.getAttribute("data-page");
+    if (page) {
+      var btn = document.querySelector('.nav button[data-page="' + page + '"]');
+      if (btn) {
+        btn.click();
+        if (window.investToast) window.investToast("Saved");
+        return;
+      }
+    }
+    location.reload();
   }
 
   function money(n) {
@@ -139,7 +157,7 @@
       st.transactions = st.transactions.map(function (x) { return x.id === t.id ? next : x; });
       saveState(st);
       closeLocalModal();
-      location.reload();
+      softRefresh();
     });
   }
 
@@ -197,7 +215,7 @@
       st.transactions = st.transactions.map(function (x) { return x.id === t.id ? next : x; });
       saveState(st);
       closeLocalModal();
-      location.reload();
+      softRefresh();
     });
   }
 
@@ -260,7 +278,7 @@
       st.transactions = st.transactions.filter(function (x) { return x.id !== delInst.getAttribute("data-ei-del"); });
       saveState(st);
       closeLocalModal();
-      location.reload();
+      softRefresh();
       return;
     }
     var txEdit = t.closest && t.closest("[data-ei-tx-edit]");
@@ -292,5 +310,5 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchView);
   else watchView();
 
-  console.log("[edit-installments] ready v4");
+  console.log("[edit-installments] ready v5 soft-refresh");
 })();
