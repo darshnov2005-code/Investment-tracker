@@ -1,6 +1,6 @@
 "use strict";
 /**
- * DOM patch: SIP installment edit/delete + transaction edit
+ * DOM patch: SIP plan edit + installment edit/delete + transaction edit
  * Soft refresh after save (no full page reload when possible).
  */
 (function () {
@@ -53,10 +53,10 @@
 
   function esc(s) {
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/&/g, "&")
+      .replace(/</g, "<")
+      .replace(/>/g, ">")
+      .replace(/"/g, """);
   }
 
   function totalCharges(t) {
@@ -108,10 +108,89 @@
       "<thead><tr><th>Date</th><th>NAV</th><th>Units</th><th>Amount</th><th>Charges</th><th></th></tr></thead>" +
       "<tbody>" + rows + "</tbody></table></div>" +
       '<div class="modalfoot"><button type="button" class="btn" id="ei-close">Close</button>' +
+      '<button type="button" class="btn" data-sip-edit-plan="' + esc(p.id) + '">Edit plan</button>' +
       '<button type="button" class="btn primary" data-sip-add="' + esc(p.id) + '">\uff0b Record installment</button></div>'
     );
     var closeBtn = $("ei-close");
     if (closeBtn) closeBtn.onclick = closeLocalModal;
+  }
+
+  function showEditSipPlan(planId) {
+    var st = getState();
+    if (!st) return;
+    var p = (st.sips || []).find(function (x) { return x.id === planId; });
+    if (!p) return alert("SIP plan not found.");
+    var freqs = ["MONTHLY", "QUARTERLY", "WEEKLY"];
+    var statuses = ["ACTIVE", "PAUSED", "STOPPED"];
+    var freqOpts = freqs.map(function (x) {
+      return '<option value="' + x + '"' + ((p.frequency || "MONTHLY") === x ? " selected" : "") + ">" + x + "</option>";
+    }).join("");
+    var statusOpts = statuses.map(function (x) {
+      return '<option value="' + x + '"' + ((p.status || "ACTIVE") === x ? " selected" : "") + ">" + x + "</option>";
+    }).join("");
+    openLocalModal(
+      "<h2>Edit SIP plan</h2>" +
+      '<p class="muted" style="margin:0 0 10px">Change planned amount, frequency, or status. Past installments are not changed.</p>' +
+      '<form id="ei-sip-plan"><div class="form">' +
+      '<div class="field full"><label>Mutual fund name</label><input class="input wide" name="name" required value="' + esc(p.name || "") + '"></div>' +
+      '<div class="field"><label>Scheme code / symbol</label><input class="input wide" name="symbol" required value="' + esc(p.symbol || "") + '"></div>' +
+      '<div class="field"><label>Frequency</label><select class="select wide" name="frequency">' + freqOpts + "</select></div>" +
+      '<div class="field"><label>SIP amount (planned)</label><input class="input wide" type="number" min="1" step="any" name="amount" required value="' + (Number(p.amount) || "") + '"></div>' +
+      '<div class="field"><label>Start date</label><input class="input wide" type="date" name="startDate" required value="' + esc(p.startDate || "") + '"></div>' +
+      '<div class="field"><label>Status</label><select class="select wide" name="status">' + statusOpts + "</select></div>" +
+      '<div class="field full"><label>Notes</label><input class="input wide" name="notes" value="' + esc(p.notes || "") + '"></div>' +
+      '</div><div class="modalfoot"><button type="button" class="btn" id="ei-close">Cancel</button>' +
+      '<button type="submit" class="btn primary">Save plan</button></div></form>'
+    );
+    var closeBtn = $("ei-close");
+    if (closeBtn) closeBtn.onclick = closeLocalModal;
+    var f = $("ei-sip-plan");
+    if (!f) return;
+    f.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var o = Object.fromEntries(new FormData(f));
+      st.sips = (st.sips || []).map(function (x) {
+        if (x.id !== p.id) return x;
+        return Object.assign({}, x, {
+          name: o.name,
+          symbol: o.symbol,
+          frequency: o.frequency,
+          amount: Number(o.amount),
+          startDate: o.startDate,
+          status: o.status,
+          notes: o.notes || "",
+          type: x.type || "MUTUAL_FUND",
+          exchange: x.exchange || "AMFI"
+        });
+      });
+      if (p.symbol !== o.symbol || p.name !== o.name) {
+        st.transactions = (st.transactions || []).map(function (t) {
+          if (t.sipId !== p.id) return t;
+          return Object.assign({}, t, { name: o.name, symbol: o.symbol });
+        });
+      }
+      saveState(st);
+      closeLocalModal();
+      softRefresh();
+    });
+  }
+
+  function injectSipPlanEdits() {
+    var view = $("view");
+    if (!view) return;
+    view.querySelectorAll("[data-sip-del]").forEach(function (delBtn) {
+      var id = delBtn.getAttribute("data-sip-del");
+      if (!id) return;
+      var foot = delBtn.parentElement;
+      if (!foot) return;
+      if (foot.querySelector('[data-sip-edit-plan="' + id + '"]')) return;
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "btn";
+      edit.textContent = "Edit plan";
+      edit.setAttribute("data-sip-edit-plan", id);
+      foot.insertBefore(edit, delBtn);
+    });
   }
 
   function showEditInstallment(txId) {
@@ -287,6 +366,12 @@
       showEditTransaction(txEdit.getAttribute("data-ei-tx-edit"));
       return;
     }
+    var planEdit = t.closest && t.closest("[data-sip-edit-plan]");
+    if (planEdit) {
+      e.preventDefault(); e.stopPropagation();
+      showEditSipPlan(planEdit.getAttribute("data-sip-edit-plan"));
+      return;
+    }
     var btn = t.closest && t.closest("[data-sip-details]");
     if (btn) {
       e.preventDefault(); e.stopPropagation();
@@ -302,13 +387,14 @@
     hideSummaryNav();
     var view = $("view");
     if (!view) { setTimeout(watchView, 200); return; }
-    new MutationObserver(function () { injectTransactionEdits(); hideSummaryNav(); })
+    new MutationObserver(function () { injectTransactionEdits(); injectSipPlanEdits(); hideSummaryNav(); })
       .observe(view, { childList: true, subtree: true });
     injectTransactionEdits();
+    injectSipPlanEdits();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchView);
   else watchView();
 
-  console.log("[edit-installments] ready v5 soft-refresh");
+  console.log("[edit-installments] ready v6 edit-sip-plan");
 })();
