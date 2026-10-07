@@ -24,7 +24,7 @@
       "/weekly-review-ui.js",
       "/visual-pro.js"
     ];
-    var ver = "?v=17";
+    var ver = "?v=18";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
