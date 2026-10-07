@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Visual + SIP plan edit (reliable injection on MF SIPs page)
+ * Visual pro + SIP plan edit + Transaction edit
  */
 (function () {
   var STATE_KEY = "investtrack-v4";
@@ -35,15 +35,12 @@
       ".hero-card .hero-sub{font-size:12px;color:var(--muted)}" +
       ".hero-card.up .hero-num{color:var(--green)}.hero-card.down .hero-num{color:var(--red)}" +
       ".stats .card .big{font-size:22px;font-weight:800}" +
-      ".stats .card{border-radius:12px}" +
-      ".table tbody tr:hover{background:rgba(255,255,255,.03)}" +
-      ".sip-card-pro{border-radius:14px!important;border-color:#2a3d4f!important}" +
-      ".sip-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}" +
+      ".sip-card-pro{border-radius:14px!important}" +
       "#sipPlanEditBar{border:1px solid rgba(143,211,182,.45)!important;" +
       "background:linear-gradient(145deg,rgba(143,211,182,.1),rgba(15,22,31,.9))!important;" +
       "border-radius:14px;padding:14px 16px;margin:12px 0}" +
-      "@media (max-width:900px){.hero-strip{grid-template-columns:1fr 1fr}.hero-card .hero-num{font-size:22px}}" +
-      "@media (max-width:520px){.hero-strip{grid-template-columns:1fr}}";
+      "button[data-vp-edit-tx]{font-weight:700}" +
+      "@media (max-width:900px){.hero-strip{grid-template-columns:1fr 1fr}}";
     document.head.appendChild(s);
   }
 
@@ -95,12 +92,11 @@
 
   function openSipPlanEditor(planId) {
     var st = getState();
-    if (!st) return alert("No portfolio data in this browser.");
+    if (!st) return alert("No portfolio data.");
     var p = (st.sips || []).find(function (x) {
       return String(x.id) === String(planId);
     });
     if (!p) return alert("SIP plan not found.");
-
     var freqs = ["MONTHLY", "QUARTERLY", "WEEKLY"];
     var statuses = ["ACTIVE", "PAUSED", "STOPPED"];
     function opts(list, cur) {
@@ -118,14 +114,12 @@
         })
         .join("");
     }
-
     var mb = document.getElementById("mb");
     var modal = document.getElementById("modal");
-    if (!mb || !modal) return alert("Modal not ready \u2014 refresh the page.");
-
+    if (!mb || !modal) return alert("Modal not ready.");
     modal.innerHTML =
       '<h2 style="margin:0 0 6px">\u270e Edit SIP plan</h2>' +
-      '<p class="muted" style="margin:0 0 12px">Change planned amount, frequency, or status. Past installments are not modified.</p>' +
+      '<p class="muted" style="margin:0 0 12px">Change planned amount, frequency, or status.</p>' +
       '<form id="vp-sip-plan"><div class="form">' +
       '<div class="field full"><label>Fund name</label><input class="input wide" name="name" required value="' +
       esc(p.name || "") +
@@ -147,12 +141,10 @@
       "</select></div>" +
       '<div class="field full"><label>Notes</label><input class="input wide" name="notes" value="' +
       esc(p.notes || "") +
-      '"></div>' +
-      '</div><div class="modalfoot">' +
-      '<button type="button" class="btn" id="vp-sip-cancel">Cancel</button>' +
+      '"></div></div>' +
+      '<div class="modalfoot"><button type="button" class="btn" id="vp-sip-cancel">Cancel</button>' +
       '<button type="submit" class="btn primary">Save plan</button></div></form>';
     mb.classList.remove("hidden");
-
     var cancel = document.getElementById("vp-sip-cancel");
     if (cancel)
       cancel.onclick = function () {
@@ -177,12 +169,6 @@
           exchange: x.exchange || "AMFI"
         });
       });
-      if (p.symbol !== o.symbol || p.name !== o.name) {
-        st.transactions = (st.transactions || []).map(function (t) {
-          if (String(t.sipId) !== String(p.id)) return t;
-          return Object.assign({}, t, { name: o.name, symbol: o.symbol });
-        });
-      }
       try {
         st.meta = st.meta || {};
         st.meta.lastSavedAt = Date.now();
@@ -198,6 +184,133 @@
     };
   }
 
+  function openTxEditor(txId) {
+    var st = getState();
+    if (!st) return alert("No portfolio data.");
+    var t = (st.transactions || []).find(function (x) {
+      return String(x.id) === String(txId);
+    });
+    if (!t) return alert("Transaction not found.");
+    var types = ["STOCK","MUTUAL_FUND","ETF","FD","BOND","SGB","PPF","NPS","GOLD","CASH","OTHER"];
+    var actions = ["BUY","SELL","SIP","DIVIDEND","BONUS","SPLIT","RIGHTS","REDEMPTION"];
+    function opts(list, cur) {
+      return list
+        .map(function (x) {
+          return (
+            '<option value="' +
+            x +
+            '"' +
+            (cur === x ? " selected" : "") +
+            ">" +
+            x +
+            "</option>"
+          );
+        })
+        .join("");
+    }
+    var exch = t.exchange || "NSE";
+    var mb = document.getElementById("mb");
+    var modal = document.getElementById("modal");
+    if (!mb || !modal) return alert("Modal not ready.");
+    modal.innerHTML =
+      '<h2 style="margin:0 0 8px">\u270e Edit transaction</h2>' +
+      '<form id="vp-tx-form"><div class="form">' +
+      '<div class="field"><label>Type</label><select class="select wide" name="type">' +
+      opts(types, t.type || "STOCK") +
+      "</select></div>" +
+      '<div class="field"><label>Action</label><select class="select wide" name="action">' +
+      opts(actions, t.action || "BUY") +
+      "</select></div>" +
+      '<div class="field full"><label>Name</label><input class="input wide" name="name" required value="' +
+      esc(t.name || "") +
+      '"></div>' +
+      '<div class="field"><label>Symbol</label><input class="input wide" name="symbol" required value="' +
+      esc(t.symbol || "") +
+      '"></div>' +
+      '<div class="field"><label>Exchange</label><select class="select wide" name="exchange">' +
+      "<option" +
+      (exch === "NSE" ? " selected" : "") +
+      ">NSE</option>" +
+      "<option" +
+      (exch === "BSE" ? " selected" : "") +
+      ">BSE</option>" +
+      "<option" +
+      (exch === "AMFI" ? " selected" : "") +
+      ">AMFI</option>" +
+      "<option" +
+      (exch === "OTHER" ? " selected" : "") +
+      ">OTHER</option></select></div>" +
+      '<div class="field"><label>Date</label><input class="input wide" type="date" name="date" required value="' +
+      esc(t.date || "") +
+      '"></div>' +
+      '<div class="field"><label>Qty / units</label><input class="input wide" type="number" step="any" name="qty" required value="' +
+      (Number(t.qty) || "") +
+      '"></div>' +
+      '<div class="field"><label>Price / NAV</label><input class="input wide" type="number" step="any" name="price" required value="' +
+      (Number(t.price) || "") +
+      '"></div>' +
+      '<div class="field"><label>Brokerage</label><input class="input wide" type="number" step="any" name="brokerage" value="' +
+      (Number(t.brokerage) || 0) +
+      '"></div>' +
+      '<div class="field"><label>STT</label><input class="input wide" type="number" step="any" name="stt" value="' +
+      (Number(t.stt) || 0) +
+      '"></div>' +
+      '<div class="field"><label>GST</label><input class="input wide" type="number" step="any" name="gst" value="' +
+      (Number(t.gst) || 0) +
+      '"></div>' +
+      '<div class="field"><label>Other charges</label><input class="input wide" type="number" step="any" name="otherCharges" value="' +
+      (Number(t.otherCharges) || 0) +
+      '"></div>' +
+      '<div class="field full"><label>Notes</label><input class="input wide" name="notes" value="' +
+      esc(t.notes || "") +
+      '"></div></div>' +
+      '<div class="modalfoot"><button type="button" class="btn" id="vp-tx-cancel">Cancel</button>' +
+      '<button type="submit" class="btn primary">Save transaction</button></div></form>';
+    mb.classList.remove("hidden");
+    var cancel = document.getElementById("vp-tx-cancel");
+    if (cancel)
+      cancel.onclick = function () {
+        mb.classList.add("hidden");
+      };
+    var f = document.getElementById("vp-tx-form");
+    if (!f) return;
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      var o = Object.fromEntries(new FormData(f));
+      var next = Object.assign({}, t, {
+        type: o.type,
+        action: o.action,
+        name: o.name,
+        symbol: o.symbol,
+        exchange: o.exchange,
+        date: o.date,
+        qty: Number(o.qty),
+        price: Number(o.price),
+        brokerage: Number(o.brokerage) || 0,
+        stt: Number(o.stt) || 0,
+        gst: Number(o.gst) || 0,
+        otherCharges: Number(o.otherCharges) || 0,
+        notes: o.notes || ""
+      });
+      next.charges = next.brokerage + next.stt + next.gst + next.otherCharges;
+      st.transactions = (st.transactions || []).map(function (x) {
+        return String(x.id) === String(t.id) ? next : x;
+      });
+      try {
+        st.meta = st.meta || {};
+        st.meta.lastSavedAt = Date.now();
+        localStorage.setItem(STATE_KEY, JSON.stringify(st));
+      } catch (err) {
+        return alert("Could not save: " + err.message);
+      }
+      mb.classList.add("hidden");
+      if (window.investToast) window.investToast("Transaction saved");
+      var btn = document.querySelector('.nav button[data-page="transactions"]');
+      if (btn) btn.click();
+      else location.reload();
+    };
+  }
+
   function injectSipTools() {
     var view = document.getElementById("view");
     if (!view) return;
@@ -208,17 +321,14 @@
       (h2 && /mutual fund sip/i.test(h2.textContent || "")) ||
       !!view.querySelector("[data-sip-add], [data-sip-del]");
     if (!isSip) return;
-
     var st = getState();
     var sips = (st && st.sips) || [];
-
     if (sips.length && !view.querySelector("#sipPlanEditBar")) {
       var bar = document.createElement("div");
       bar.id = "sipPlanEditBar";
       bar.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">' +
-        '<div><b style="font-size:15px">\u270e Edit SIP plan</b>' +
-        '<div class="muted" style="margin-top:3px">Change planned amount, frequency, or pause a SIP</div></div></div>' +
+        '<div style="margin-bottom:10px"><b style="font-size:15px">\u270e Edit SIP plan</b>' +
+        '<div class="muted" style="margin-top:3px">Change planned amount, frequency, or status</div></div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
         sips
           .map(function (p) {
@@ -238,14 +348,11 @@
       if (head && head.parentNode) head.parentNode.insertBefore(bar, head.nextSibling);
       else view.insertBefore(bar, view.firstChild);
     }
-
     view.querySelectorAll("[data-sip-add]").forEach(function (btn) {
       var id = btn.getAttribute("data-sip-add");
       if (!id) return;
       var foot = btn.closest(".modalfoot") || btn.parentElement;
       if (!foot) return;
-      foot.classList.add("sip-actions");
-
       if (!foot.querySelector('[data-vp-edit-sip="' + id + '"]')) {
         var edit = document.createElement("button");
         edit.type = "button";
@@ -255,7 +362,6 @@
         edit.style.fontWeight = "700";
         foot.insertBefore(edit, foot.firstChild);
       }
-
       if (!foot.querySelector(".sip-quick")) {
         var q = document.createElement("button");
         q.type = "button";
@@ -266,9 +372,31 @@
         else foot.appendChild(q);
       }
     });
+  }
 
-    view.querySelectorAll(".grid.two > .card").forEach(function (card) {
-      card.classList.add("sip-card-pro");
+  function injectTxEdits() {
+    var view = document.getElementById("view");
+    if (!view) return;
+    var h2 = view.querySelector("h2");
+    var title = document.getElementById("title");
+    var isTx =
+      (h2 && /transaction ledger/i.test(h2.textContent || "")) ||
+      (title && /transaction/i.test(title.textContent || "")) ||
+      !!view.querySelector("button[data-del]");
+    if (!isTx) return;
+    view.querySelectorAll("button[data-del]").forEach(function (delBtn) {
+      var id = delBtn.getAttribute("data-del");
+      if (!id) return;
+      var cell = delBtn.parentElement;
+      if (!cell) return;
+      if (cell.querySelector('[data-vp-edit-tx="' + id + '"]')) return;
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "btn primary";
+      edit.textContent = "\u270e Edit";
+      edit.setAttribute("data-vp-edit-tx", id);
+      edit.style.cssText = "margin-right:6px;font-weight:700";
+      cell.insertBefore(edit, delBtn);
     });
   }
 
@@ -306,6 +434,7 @@
     injectCss();
     enhanceDashboard();
     injectSipTools();
+    injectTxEdits();
   }
 
   document.addEventListener(
@@ -313,11 +442,18 @@
     function (e) {
       var t = e.target;
       if (!t) return;
-      var ed = t.closest && t.closest("[data-vp-edit-sip]");
-      if (ed) {
+      var edSip = t.closest && t.closest("[data-vp-edit-sip]");
+      if (edSip) {
         e.preventDefault();
         e.stopPropagation();
-        openSipPlanEditor(ed.getAttribute("data-vp-edit-sip"));
+        openSipPlanEditor(edSip.getAttribute("data-vp-edit-sip"));
+        return;
+      }
+      var edTx = t.closest && t.closest("[data-vp-edit-tx]");
+      if (edTx) {
+        e.preventDefault();
+        e.stopPropagation();
+        openTxEditor(edTx.getAttribute("data-vp-edit-tx"));
         return;
       }
       var q = t.closest && t.closest("[data-sip-quick]");
@@ -329,8 +465,13 @@
       }
       if (t.closest && t.closest('[data-page="sips"]')) {
         setTimeout(injectSipTools, 50);
-        setTimeout(injectSipTools, 250);
-        setTimeout(injectSipTools, 700);
+        setTimeout(injectSipTools, 300);
+        setTimeout(injectSipTools, 800);
+      }
+      if (t.closest && t.closest('[data-page="transactions"]')) {
+        setTimeout(injectTxEdits, 50);
+        setTimeout(injectTxEdits, 300);
+        setTimeout(injectTxEdits, 800);
       }
     },
     true
@@ -351,7 +492,7 @@
   else boot();
   setTimeout(boot, 500);
   setTimeout(boot, 1500);
-  setTimeout(injectSipTools, 2000);
+  setTimeout(injectTxEdits, 2000);
 
-  console.log("[visual-pro] ready v3 \u2014 SIP edit plan + hero");
+  console.log("[visual-pro] ready v4 \u2014 SIP edit + transaction edit");
 })();
