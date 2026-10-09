@@ -106,7 +106,7 @@
 
   function monthlyFrom(cash, fno) {
     var map = {};
-    cash.forEach(function (d) {
+    (cash || []).forEach(function (d) {
       var k = String(d.date).slice(0, 7);
       if (!map[k])
         map[k] = {
@@ -130,7 +130,7 @@
       m.diiBuy += d.diiBuy || 0;
       m.diiSell += d.diiSell || 0;
     });
-    fno.forEach(function (d) {
+    (fno || []).forEach(function (d) {
       var k = String(d.date).slice(0, 7);
       if (!map[k])
         map[k] = {
@@ -171,7 +171,7 @@
     var soft = sea.softDays || [];
     var strong = sea.strongDays || [];
     var fd = data.fiiDii || {};
-    var merged = mergeHist(fd.dailyCash || [], fd.dailyFno || {});
+    var merged = mergeHist(fd.dailyCash || [], fd.dailyFno || []);
     var dailyCash = merged.cash;
     var dailyFno = merged.fno;
     var monthly = monthlyFrom(dailyCash, dailyFno);
