@@ -1,6 +1,7 @@
 "use strict";
 /**
  * Visual pro + SIP plan edit + Transaction edit
+ * After save: full page reload so core re-reads localStorage (in-memory state is stale).
  */
 (function () {
   var STATE_KEY = "investtrack-v4";
@@ -172,15 +173,14 @@
       try {
         st.meta = st.meta || {};
         st.meta.lastSavedAt = Date.now();
+        st.version = st.version || 4;
         localStorage.setItem(STATE_KEY, JSON.stringify(st));
+        if (!localStorage.getItem(STATE_KEY)) throw new Error("localStorage write failed");
       } catch (err) {
         return alert("Could not save: " + err.message);
       }
       mb.classList.add("hidden");
-      if (window.investToast) window.investToast("SIP plan saved");
-      var btn = document.querySelector('.nav button[data-page="sips"]');
-      if (btn) btn.click();
-      else location.reload();
+      location.reload();
     };
   }
 
@@ -299,15 +299,24 @@
       try {
         st.meta = st.meta || {};
         st.meta.lastSavedAt = Date.now();
-        localStorage.setItem(STATE_KEY, JSON.stringify(st));
+        st.version = st.version || 4;
+        var payload = JSON.stringify(st);
+        localStorage.setItem(STATE_KEY, payload);
+        var check = localStorage.getItem(STATE_KEY);
+        if (!check || check.length < 10) throw new Error("localStorage write failed");
+        var parsed = JSON.parse(check);
+        var found = (parsed.transactions || []).find(function (x) {
+          return String(x.id) === String(t.id);
+        });
+        if (!found || Number(found.qty) !== Number(next.qty) || Number(found.price) !== Number(next.price)) {
+          throw new Error("Save verification failed \u2014 data did not stick");
+        }
       } catch (err) {
         return alert("Could not save: " + err.message);
       }
       mb.classList.add("hidden");
-      if (window.investToast) window.investToast("Transaction saved");
-      var btn = document.querySelector('.nav button[data-page="transactions"]');
-      if (btn) btn.click();
-      else location.reload();
+      // Core keeps portfolio in memory; only full reload re-reads localStorage
+      location.reload();
     };
   }
 
@@ -494,5 +503,5 @@
   setTimeout(boot, 1500);
   setTimeout(injectTxEdits, 2000);
 
-  console.log("[visual-pro] ready v4 \u2014 SIP edit + transaction edit");
+  console.log("[visual-pro] ready v5 \u2014 tx/sip save forces reload");
 })();
