@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Visual pro + SIP plan edit + Transaction edit
- * After save: full reload (so core re-reads localStorage) but skip PIN lock via session flag.
+ * After save: reload so data sticks, skip PIN, restore same page.
  */
 (function () {
   var STATE_KEY = "investtrack-v4";
@@ -180,8 +180,7 @@
         return alert("Could not save: " + err.message);
       }
       mb.classList.add("hidden");
-      try { sessionStorage.setItem("investtrack-skip-pin", String(Date.now())); } catch (e) {}
-      location.reload();
+      rememberPageAndReload();
     };
   }
 
@@ -316,8 +315,7 @@
         return alert("Could not save: " + err.message);
       }
       mb.classList.add("hidden");
-      try { sessionStorage.setItem("investtrack-skip-pin", String(Date.now())); } catch (e) {}
-      location.reload();
+      rememberPageAndReload();
     };
   }
 
@@ -440,6 +438,51 @@
     }, 120);
   }
 
+  function rememberPageAndReload() {
+    try {
+      var active = document.querySelector(".nav button.active[data-page]");
+      var page = active && active.getAttribute("data-page");
+      if (!page) {
+        var title = document.getElementById("title");
+        var t = (title && title.textContent) || "";
+        if (/transaction/i.test(t)) page = "transactions";
+        else if (/sip/i.test(t)) page = "sips";
+        else if (/holding/i.test(t)) page = "holdings";
+        else if (/goal/i.test(t)) page = "goals";
+        else if (/setting/i.test(t)) page = "settings";
+        else if (/realis|realiz/i.test(t)) page = "realized";
+        else if (/research/i.test(t)) page = "research";
+        else if (/import/i.test(t)) page = "import";
+      }
+      if (page) sessionStorage.setItem("investtrack-restore-page", page);
+      sessionStorage.setItem("investtrack-skip-pin", String(Date.now()));
+    } catch (e) {}
+    location.reload();
+  }
+
+  function restorePageAfterReload() {
+    try {
+      var page = sessionStorage.getItem("investtrack-restore-page");
+      if (!page) return;
+      sessionStorage.removeItem("investtrack-restore-page");
+      function go() {
+        var btn = document.querySelector('.nav button[data-page="' + page + '"]');
+        if (btn) {
+          btn.click();
+          return true;
+        }
+        return false;
+      }
+      if (!go()) {
+        setTimeout(go, 150);
+        setTimeout(go, 400);
+        setTimeout(go, 900);
+      } else {
+        setTimeout(go, 300);
+      }
+    } catch (e) {}
+  }
+
   function trySkipPinLock() {
     try {
       var t = Number(sessionStorage.getItem("investtrack-skip-pin") || 0);
@@ -467,6 +510,7 @@
   function runAll() {
     injectCss();
     trySkipPinLock();
+    restorePageAfterReload();
     enhanceDashboard();
     injectSipTools();
     injectTxEdits();
@@ -515,6 +559,7 @@
   function boot() {
     injectCss();
     trySkipPinLock();
+    restorePageAfterReload();
     var view = document.getElementById("view");
     if (view) {
       new MutationObserver(function () {
@@ -530,8 +575,10 @@
   setTimeout(boot, 1500);
   setTimeout(injectTxEdits, 2000);
   trySkipPinLock();
+  restorePageAfterReload();
   setTimeout(trySkipPinLock, 300);
-  setTimeout(trySkipPinLock, 1000);
+  setTimeout(restorePageAfterReload, 400);
+  setTimeout(restorePageAfterReload, 1000);
 
-  console.log("[visual-pro] ready v6 \u2014 save reload skips PIN");
+  console.log("[visual-pro] ready v7 \u2014 restore page after edit");
 })();
