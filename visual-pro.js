@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Visual pro + SIP plan edit + Transaction edit
- * After save: full page reload so core re-reads localStorage (in-memory state is stale).
+ * After save: full reload (so core re-reads localStorage) but skip PIN lock via session flag.
  */
 (function () {
   var STATE_KEY = "investtrack-v4";
@@ -180,6 +180,7 @@
         return alert("Could not save: " + err.message);
       }
       mb.classList.add("hidden");
+      try { sessionStorage.setItem("investtrack-skip-pin", String(Date.now())); } catch (e) {}
       location.reload();
     };
   }
@@ -315,7 +316,7 @@
         return alert("Could not save: " + err.message);
       }
       mb.classList.add("hidden");
-      // Core keeps portfolio in memory; only full reload re-reads localStorage
+      try { sessionStorage.setItem("investtrack-skip-pin", String(Date.now())); } catch (e) {}
       location.reload();
     };
   }
@@ -439,8 +440,33 @@
     }, 120);
   }
 
+  function trySkipPinLock() {
+    try {
+      var t = Number(sessionStorage.getItem("investtrack-skip-pin") || 0);
+      if (!t || Date.now() - t > 120000) return false;
+      sessionStorage.removeItem("investtrack-skip-pin");
+      function hideLock() {
+        var ls = document.getElementById("lockscreen");
+        if (!ls) return;
+        ls.classList.add("hidden");
+        ls.style.display = "none";
+      }
+      hideLock();
+      var n = 0;
+      var iv = setInterval(function () {
+        hideLock();
+        n++;
+        if (n > 25) clearInterval(iv);
+      }, 80);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function runAll() {
     injectCss();
+    trySkipPinLock();
     enhanceDashboard();
     injectSipTools();
     injectTxEdits();
@@ -488,6 +514,7 @@
 
   function boot() {
     injectCss();
+    trySkipPinLock();
     var view = document.getElementById("view");
     if (view) {
       new MutationObserver(function () {
@@ -502,6 +529,9 @@
   setTimeout(boot, 500);
   setTimeout(boot, 1500);
   setTimeout(injectTxEdits, 2000);
+  trySkipPinLock();
+  setTimeout(trySkipPinLock, 300);
+  setTimeout(trySkipPinLock, 1000);
 
-  console.log("[visual-pro] ready v5 \u2014 tx/sip save forces reload");
+  console.log("[visual-pro] ready v6 \u2014 save reload skips PIN");
 })();
