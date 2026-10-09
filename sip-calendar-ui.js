@@ -1,9 +1,11 @@
 "use strict";
 /**
- * SIP calendar: day-of-month seasonality + FII/DII cash (F&O placeholder).
+ * SIP calendar + FII/DII (Moneycontrol cash & F&O), daily/monthly toggle.
  */
 (function () {
-  var CACHE = "investtrack-sip-calendar-v1";
+  var CACHE = "investtrack-sip-calendar-v2";
+  var HIST = "investtrack-fiidii-hist-v1";
+  var MODE_KEY = "investtrack-fiidii-mode";
 
   function esc(x) {
     var d = document.createElement("div");
@@ -45,8 +47,112 @@
       ".sc-day.today{outline:2px solid var(--green)}" +
       ".sc-kpi{font-size:22px;font-weight:800}" +
       ".sc-note{font-size:12px;color:var(--muted);line-height:1.45}" +
+      ".sc-toggle{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}" +
+      ".sc-toggle button{border:0;background:transparent;color:inherit;padding:8px 14px;cursor:pointer;font-weight:600;font-size:13px}" +
+      ".sc-toggle button.active{background:rgba(143,211,182,.2)}" +
       "@media (max-width:700px){.sc-grid{grid-template-columns:repeat(4,1fr)}}";
     document.head.appendChild(s);
+  }
+
+  function getMode() {
+    try {
+      return localStorage.getItem(MODE_KEY) === "monthly" ? "monthly" : "daily";
+    } catch (e) {
+      return "daily";
+    }
+  }
+  function setMode(m) {
+    try {
+      localStorage.setItem(MODE_KEY, m);
+    } catch (e) {}
+  }
+
+  function mergeHist(dailyCash, dailyFno) {
+    var hist = { cash: {}, fno: {} };
+    try {
+      hist = JSON.parse(localStorage.getItem(HIST) || "{}") || { cash: {}, fno: {} };
+    } catch (e) {
+      hist = { cash: {}, fno: {} };
+    }
+    if (!hist.cash) hist.cash = {};
+    if (!hist.fno) hist.fno = {};
+    (dailyCash || []).forEach(function (r) {
+      if (r && r.date) hist.cash[r.date] = r;
+    });
+    (dailyFno || []).forEach(function (r) {
+      if (r && r.date) hist.fno[r.date] = r;
+    });
+    try {
+      localStorage.setItem(HIST, JSON.stringify(hist));
+    } catch (e) {}
+    var cash = Object.keys(hist.cash)
+      .filter(function (d) {
+        return d >= "2026-01-01";
+      })
+      .sort()
+      .map(function (d) {
+        return hist.cash[d];
+      });
+    var fno = Object.keys(hist.fno)
+      .filter(function (d) {
+        return d >= "2026-01-01";
+      })
+      .sort()
+      .map(function (d) {
+        return hist.fno[d];
+      });
+    return { cash: cash, fno: fno };
+  }
+
+  function monthlyFrom(cash, fno) {
+    var map = {};
+    cash.forEach(function (d) {
+      var k = String(d.date).slice(0, 7);
+      if (!map[k])
+        map[k] = {
+          month: k,
+          sessions: 0,
+          fiiNet: 0,
+          diiNet: 0,
+          fiiBuy: 0,
+          fiiSell: 0,
+          diiBuy: 0,
+          diiSell: 0,
+          futNet: 0,
+          optNet: 0
+        };
+      var m = map[k];
+      m.sessions++;
+      m.fiiNet += d.fiiNet || 0;
+      m.diiNet += d.diiNet || 0;
+      m.fiiBuy += d.fiiBuy || 0;
+      m.fiiSell += d.fiiSell || 0;
+      m.diiBuy += d.diiBuy || 0;
+      m.diiSell += d.diiSell || 0;
+    });
+    fno.forEach(function (d) {
+      var k = String(d.date).slice(0, 7);
+      if (!map[k])
+        map[k] = {
+          month: k,
+          sessions: 0,
+          fiiNet: 0,
+          diiNet: 0,
+          fiiBuy: 0,
+          fiiSell: 0,
+          diiBuy: 0,
+          diiSell: 0,
+          futNet: 0,
+          optNet: 0
+        };
+      map[k].futNet += d.futNet || 0;
+      map[k].optNet += d.optNet || 0;
+    });
+    return Object.keys(map)
+      .sort()
+      .map(function (k) {
+        return map[k];
+      });
   }
 
   function heatColor(avg) {
@@ -58,14 +164,19 @@
 
   function render(data) {
     injectCss();
+    var mode = getMode();
     var sea = data.seasonality || {};
     var byDom = sea.byDayOfMonth || [];
     var byDow = sea.byWeekday || [];
     var soft = sea.softDays || [];
     var strong = sea.strongDays || [];
-    var cash = (data.fiiDii && data.fiiDii.cash) || {};
-    var fno = (data.fiiDii && data.fiiDii.fno) || {};
+    var fd = data.fiiDii || {};
+    var merged = mergeHist(fd.dailyCash || [], fd.dailyFno || {});
+    var dailyCash = merged.cash;
+    var dailyFno = merged.fno;
+    var monthly = monthlyFrom(dailyCash, dailyFno);
     var today = new Date().getDate();
+    var latest = dailyCash.length ? dailyCash[dailyCash.length - 1] : fd.latestCash;
 
     var softChips = soft
       .map(function (d) {
@@ -125,72 +236,141 @@
       })
       .join("");
 
-    var fii = cash.fii || {};
-    var dii = cash.dii || {};
-    var cashHtml = cash.error
-      ? '<div class="muted">' + esc(cash.error) + "</div>"
-      : '<div class="grid stats" style="margin:0">' +
-        '<div class="card"><div class="label">FII / FPI net (cash)</div><div class="sc-kpi ' +
-        cls(fii.net) +
-        '">' +
-        moneyCr(fii.net) +
-        '</div><div class="muted">Buy ' +
-        moneyCr(fii.buy) +
-        " \u00b7 Sell " +
-        moneyCr(fii.sell) +
-        "</div></div>" +
-        '<div class="card"><div class="label">DII net (cash)</div><div class="sc-kpi ' +
-        cls(dii.net) +
-        '">' +
-        moneyCr(dii.net) +
-        '</div><div class="muted">Buy ' +
-        moneyCr(dii.buy) +
-        " \u00b7 Sell " +
-        moneyCr(dii.sell) +
-        "</div></div>" +
-        '<div class="card"><div class="label">Session</div><div class="big">' +
-        esc(cash.date || "\u2014") +
-        '</div><div class="muted">NSE provisional</div></div></div>';
+    var fnoByDate = {};
+    dailyFno.forEach(function (r) {
+      fnoByDate[r.date] = r;
+    });
 
-    var fnoHtml = fno.available
-      ? "F&O data loaded"
-      : '<div class="sc-note">' +
-        esc(
-          fno.note ||
-            "F&O FII/DII is published by NSE after close. Free JSON is session-locked for now — cash FII/DII above is live."
-        ) +
-        "</div>";
+    var tableBody;
+    if (mode === "monthly") {
+      if (!monthly.length) {
+        tableBody =
+          '<tr><td colspan="8" class="muted">No monthly rows yet (need daily history).</td></tr>';
+      } else {
+        tableBody = monthly
+          .map(function (m) {
+            return (
+              "<tr><td><b>" +
+              esc(m.month) +
+              '</b><div class="sub">' +
+              m.sessions +
+              ' sessions in cache</div></td><td class="' +
+              cls(m.fiiNet) +
+              '">' +
+              moneyCr(m.fiiNet) +
+              '</td><td class="' +
+              cls(m.diiNet) +
+              '">' +
+              moneyCr(m.diiNet) +
+              '</td><td class="' +
+              cls(m.futNet) +
+              '">' +
+              moneyCr(m.futNet) +
+              '</td><td class="' +
+              cls(m.optNet) +
+              '">' +
+              moneyCr(m.optNet) +
+              "</td></tr>"
+            );
+          })
+          .join("");
+      }
+    } else {
+      var rows = dailyCash.slice().reverse();
+      if (!rows.length) {
+        tableBody = '<tr><td colspan="8" class="muted">No daily FII/DII yet.</td></tr>';
+      } else {
+        tableBody = rows
+          .map(function (r) {
+            var f = fnoByDate[r.date] || {};
+            return (
+              "<tr><td>" +
+              esc(r.date) +
+              '</td><td class="' +
+              cls(r.fiiNet) +
+              '">' +
+              moneyCr(r.fiiNet) +
+              '</td><td class="' +
+              cls(r.diiNet) +
+              '">' +
+              moneyCr(r.diiNet) +
+              '</td><td class="' +
+              cls(f.futNet) +
+              '">' +
+              moneyCr(f.futNet) +
+              '</td><td class="' +
+              cls(f.optNet) +
+              '">' +
+              moneyCr(f.optNet) +
+              "</td></tr>"
+            );
+          })
+          .join("");
+      }
+    }
+
+    var toggle =
+      '<div class="sc-toggle" role="group" aria-label="FII DII period">' +
+      '<button type="button" data-sc-mode="daily" class="' +
+      (mode === "daily" ? "active" : "") +
+      '">Daily</button>' +
+      '<button type="button" data-sc-mode="monthly" class="' +
+      (mode === "monthly" ? "active" : "") +
+      '">Monthly</button></div>';
 
     return (
-      '<div class="head"><div><h2>\uD83D\uDCC6 SIP calendar</h2><div class="muted">Nifty day-of-month patterns (~' +
-      esc(String(sea.years || "10")) +
-      "y) \u00b7 pick softer debit days \u00b7 auto-updates after close</div></div>" +
-      '<button type="button" class="btn primary" id="sc-refresh">Refresh</button></div>' +
-      '<div class="notice sc-note" style="margin-top:10px">Past averages are <b>not</b> a prediction. Use as one input for SIP date \u2014 not timing advice.</div>' +
+      '<div class="head"><div><h2>\uD83D\uDCC6 SIP calendar</h2><div class="muted">Nifty seasonality + FII/DII from Moneycontrol (cash & F&O)</div></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+      toggle +
+      '<button type="button" class="btn primary" id="sc-refresh">Refresh</button></div></div>' +
+      '<div class="notice sc-note" style="margin-top:10px">Past averages are <b>not</b> a prediction. Moneycontrol free feed is ~last 30 sessions; this app <b>keeps a local history</b> from Jan 2026 as you open it, so the table grows over time.</div>' +
+      (latest
+        ? '<div class="grid stats" style="margin-top:12px">' +
+          '<div class="card"><div class="label">Latest FII cash net</div><div class="sc-kpi ' +
+          cls(latest.fiiNet) +
+          '">' +
+          moneyCr(latest.fiiNet) +
+          '</div><div class="muted">' +
+          esc(latest.date) +
+          "</div></div>" +
+          '<div class="card"><div class="label">Latest DII cash net</div><div class="sc-kpi ' +
+          cls(latest.diiNet) +
+          '">' +
+          moneyCr(latest.diiNet) +
+          '</div><div class="muted">' +
+          esc(latest.date) +
+          "</div></div>" +
+          '<div class="card"><div class="label">History in this browser</div><div class="big">' +
+          dailyCash.length +
+          ' days</div><div class="muted">' +
+          monthly.length +
+          " month(s)</div></div></div>"
+        : "") +
+      '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 8px;font-size:15px">\uD83C\uDFE6 FII / DII \u2014 ' +
+      (mode === "monthly" ? "Monthly" : "Daily") +
+      " (cash + F&O)</h2>" +
+      '<div class="muted" style="margin-bottom:8px">Cash net + F&O futures/options net (\u20b9 Cr). Source: Moneycontrol.</div>' +
+      '<div class="tablewrap"><table class="table"><thead><tr>' +
+      (mode === "monthly"
+        ? "<th>Month</th><th>FII cash net</th><th>DII cash net</th><th>FUT net</th><th>OPT net</th>"
+        : "<th>Date</th><th>FII cash net</th><th>DII cash net</th><th>FUT net</th><th>OPT net</th>") +
+      "</tr></thead><tbody>" +
+      tableBody +
+      "</tbody></table></div></div>" +
       '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 8px;font-size:15px">\uD83C\uDFAF Suggested softer SIP days</h2>' +
-      '<div class="muted" style="margin-bottom:8px">Historically weaker average Nifty daily returns (min ~40 samples)</div>' +
-      "<div>" +
+      '<div class="muted" style="margin-bottom:8px">Historically weaker average Nifty daily returns</div><div>' +
       (softChips || "\u2014") +
-      '</div><div class="muted" style="margin-top:10px">Historically stronger days</div><div style="margin-top:6px">' +
+      '</div><div class="muted" style="margin-top:10px">Stronger days</div><div style="margin-top:6px">' +
       (strongChips || "\u2014") +
       "</div></div>" +
-      '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 10px;font-size:15px">\uD83D\uDCCA Day of month (avg Nifty daily %)</h2>' +
-      '<div class="sc-grid">' +
+      '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 10px;font-size:15px">\uD83D\uDCCA Day of month (avg Nifty %)</h2><div class="sc-grid">' +
       cal +
-      "</div>" +
-      '<div class="sc-note" style="margin-top:10px">Red-tinted = softer on average \u00b7 green-tinted = stronger \u00b7 outline = today\u2019s date</div></div>' +
+      "</div></div>" +
       '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 10px;font-size:15px">\uD83D\uDDD3 Weekday pattern</h2><div class="grid stats">' +
       dow +
       "</div></div>" +
-      '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 8px;font-size:15px">\uD83C\uDFE6 FII / DII \u2014 cash market</h2>' +
-      '<div class="muted" style="margin-bottom:10px">Latest NSE session (auto after close)</div>' +
-      cashHtml +
-      "</div>" +
-      '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 8px;font-size:15px">\uD83D\uDCC8 FII / DII \u2014 F&O</h2>' +
-      fnoHtml +
-      "</div>" +
       '<div class="muted" style="margin-top:12px;font-size:11px">Source: ' +
-      esc(data.source || "") +
+      esc((fd.source || data.source || "") + "") +
       " \u00b7 as of " +
       esc((data.asOf || "").slice(0, 19)) +
       "</div>"
@@ -206,16 +386,16 @@
         if (
           cached &&
           cached.asOf &&
-          Date.now() - new Date(cached.asOf).getTime() < 6 * 3600 * 1000
+          Date.now() - new Date(cached.asOf).getTime() < 3 * 3600 * 1000
         ) {
           view.innerHTML = render(cached);
-          wire();
+          wire(cached);
           return;
         }
       } catch (e) {}
     }
     view.innerHTML =
-      '<div class="head"><h2>\uD83D\uDCC6 SIP calendar</h2></div><div class="notice">Loading seasonality & FII/DII\u2026</div>';
+      '<div class="head"><h2>\uD83D\uDCC6 SIP calendar</h2></div><div class="notice">Loading Moneycontrol FII/DII + seasonality\u2026</div>';
     try {
       var r = await fetch("/api/sip-calendar?t=" + Date.now());
       if (!r.ok) throw new Error("HTTP " + r.status);
@@ -225,7 +405,7 @@
         localStorage.setItem(CACHE, JSON.stringify(data));
       } catch (e) {}
       view.innerHTML = render(data);
-      wire();
+      wire(data);
     } catch (e) {
       view.innerHTML =
         '<div class="head"><h2>\uD83D\uDCC6 SIP calendar</h2></div><div class="notice">Failed: ' +
@@ -234,12 +414,24 @@
     }
   }
 
-  function wire() {
+  function wire(data) {
     var b = document.getElementById("sc-refresh");
     if (b)
       b.onclick = function () {
         load(true);
       };
+    document.querySelectorAll("[data-sc-mode]").forEach(function (btn) {
+      btn.onclick = function () {
+        setMode(btn.getAttribute("data-sc-mode"));
+        if (data) {
+          var view = document.getElementById("view");
+          if (view) {
+            view.innerHTML = render(data);
+            wire(data);
+          }
+        } else load(false);
+      };
+    });
   }
 
   function injectNav() {
@@ -279,5 +471,5 @@
   else boot();
   setTimeout(boot, 600);
   setTimeout(boot, 1500);
-  console.log("[sip-calendar-ui] ready v1");
+  console.log("[sip-calendar-ui] ready v2 daily/monthly FII");
 })();
