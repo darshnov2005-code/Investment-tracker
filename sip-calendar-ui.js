@@ -1,6 +1,7 @@
 "use strict";
 /**
- * SIP calendar + FII/DII (Moneycontrol cash & F&O), daily/monthly toggle.
+ * SIP calendar + FII/DII (Moneycontrol cash & F&O).
+ * Auto-sync once per day; table shows last 10 with expand; FII Idx Fut/Opt columns.
  */
 (function () {
   var CACHE = "investtrack-sip-calendar-v2";
@@ -280,7 +281,12 @@
       if (!rows.length) {
         tableBody = '<tr><td colspan="8" class="muted">No daily FII/DII yet.</td></tr>';
       } else {
-        tableBody = rows
+        var expanded = false;
+        try {
+          expanded = sessionStorage.getItem("investtrack-fiidii-expanded") === "1";
+        } catch (e) {}
+        var show = expanded ? rows : rows.slice(0, 10);
+        tableBody = show
           .map(function (r) {
             var f = fnoByDate[r.date] || {};
             return (
@@ -306,6 +312,15 @@
             );
           })
           .join("");
+        if (rows.length > 10) {
+          tableBody +=
+            '<tr><td colspan="5" style="text-align:center;padding:12px">' +
+            '<button type="button" class="btn" id="sc-expand-rows">' +
+            (expanded
+              ? "Show last 10 only"
+              : "Show all " + rows.length + " sessions") +
+            "</button></td></tr>";
+        }
       }
     }
 
@@ -323,7 +338,7 @@
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
       toggle +
       '<button type="button" class="btn primary" id="sc-refresh">Refresh</button></div></div>' +
-      '<div class="notice sc-note" style="margin-top:10px">Past averages are <b>not</b> a prediction. Moneycontrol free feed is ~last 30 sessions; this app <b>keeps a local history</b> from Jan 2026 as you open it, so the table grows over time.</div>' +
+      '<div class="notice sc-note" style="margin-top:10px">FII/DII <b>auto-saves once per day</b> when you open the app (after market data is published). Moneycontrol free feed is ~30 sessions; local history grows over time.</div>' +
       (latest
         ? '<div class="grid stats" style="margin-top:12px">' +
           '<div class="card"><div class="label">Latest FII cash net</div><div class="sc-kpi ' +
@@ -349,11 +364,11 @@
       '<div class="card" style="margin-top:12px"><h2 style="margin:0 0 8px;font-size:15px">\uD83C\uDFE6 FII / DII \u2014 ' +
       (mode === "monthly" ? "Monthly" : "Daily") +
       " (cash + F&O)</h2>" +
-      '<div class="muted" style="margin-bottom:8px">Cash net + F&O futures/options net (\u20b9 Cr). Source: Moneycontrol.</div>' +
+      '<div class="muted" style="margin-bottom:8px">Cash + FII index futures & FII index options (Moneycontrol). Daily view shows last 10 by default.</div>' +
       '<div class="tablewrap"><table class="table"><thead><tr>' +
       (mode === "monthly"
-        ? "<th>Month</th><th>FII cash net</th><th>DII cash net</th><th>FUT net</th><th>OPT net</th>"
-        : "<th>Date</th><th>FII cash net</th><th>DII cash net</th><th>FUT net</th><th>OPT net</th>") +
+        ? "<th>Month</th><th>FII cash</th><th>DII cash</th><th>FII Idx Fut</th><th>FII Idx Opt</th>"
+        : "<th>Date</th><th>FII cash</th><th>DII cash</th><th>FII Idx Fut</th><th>FII Idx Opt</th>") +
       "</tr></thead><tbody>" +
       tableBody +
       "</tbody></table></div></div>" +
@@ -432,6 +447,44 @@
         } else load(false);
       };
     });
+    var exp = document.getElementById("sc-expand-rows");
+    if (exp) {
+      exp.onclick = function () {
+        try {
+          var cur = sessionStorage.getItem("investtrack-fiidii-expanded") === "1";
+          sessionStorage.setItem("investtrack-fiidii-expanded", cur ? "0" : "1");
+        } catch (e) {}
+        if (data) {
+          var view = document.getElementById("view");
+          if (view) {
+            view.innerHTML = render(data);
+            wire(data);
+          }
+        }
+      };
+    }
+  }
+
+  function autoSyncToday() {
+    try {
+      var dayKey = "investtrack-fiidii-last-sync";
+      var today = new Date().toISOString().slice(0, 10);
+      if (localStorage.getItem(dayKey) === today) return;
+      fetch("/api/sip-calendar?t=" + Date.now())
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .then(function (data) {
+          if (!data || !data.fiiDii) return;
+          mergeHist(data.fiiDii.dailyCash || [], data.fiiDii.dailyFno || []);
+          try {
+            localStorage.setItem(CACHE, JSON.stringify(data));
+            localStorage.setItem(dayKey, today);
+          } catch (e) {}
+          console.log("[sip-calendar-ui] auto-synced FII/DII for", today);
+        })
+        .catch(function () {});
+    } catch (e) {}
   }
 
   function injectNav() {
@@ -466,10 +519,11 @@
 
   function boot() {
     injectNav();
+    autoSyncToday();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
   setTimeout(boot, 600);
   setTimeout(boot, 1500);
-  console.log("[sip-calendar-ui] ready v2 daily/monthly FII");
+  console.log("[sip-calendar-ui] ready v3 last10 + idx opt + auto-sync");
 })();
