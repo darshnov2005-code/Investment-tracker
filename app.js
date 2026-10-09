@@ -10,7 +10,7 @@
       throw new Error("Bad app payload");
     (0, eval)(code);
     var patches = [
-      "/quote-fix.js",
+      "/quote-form.js",
       "/review-ui.js",
       "/movers-ui.js",
       "/ideas-ui.js",
@@ -24,7 +24,7 @@
       "/weekly-review-ui.js",
       "/visual-pro.js"
     ];
-    var ver = "?v=18";
+    var ver = "?v=19";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
