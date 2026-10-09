@@ -9,6 +9,7 @@
     "api/sector-stocks.js": { "maxDuration": 30 },
     "api/week-performance.js": { "maxDuration": 30 },
     "api/mf-week.js": { "maxDuration": 45 },
-    "api/technical.js": { "maxDuration": 15 }
+    "api/technical.js": { "maxDuration": 15 },
+    "api/sip-calendar.js": { "maxDuration": 25 }
   }
 }

@@ -22,9 +22,10 @@
       "/tx-filters.js",
       "/holdings-sector.js",
       "/weekly-review-ui.js",
-      "/visual-pro.js"
+      "/visual-pro.js",
+      "/sip-calendar-ui.js"
     ];
-    var ver = "?v=22";
+    var ver = "?v=23";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
