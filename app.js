@@ -26,7 +26,7 @@
       "/visual-pro.js",
       "/sip-calendar-ui.js"
     ];
-    var ver = "?v=25";
+    var ver = "?v=26";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
