@@ -88,6 +88,17 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
       const action = String(body.action || "push").toLowerCase();
+
+      if (action === "status") {
+        const { url, key } = env();
+        return res.status(200).json({
+          ok: true,
+          configured: !!(url && key),
+          hasServiceRole: !!(process.env.SUPABASE_SERVICE_ROLE_KEY || ""),
+          hasUrl: !!url
+        });
+      }
+
       const syncId = String(body.sync_id || body.syncId || "").trim();
       if (!syncId || syncId.length < 8) {
         return res.status(400).json({ error: "sync_id required (min 8 chars)" });
@@ -136,15 +147,6 @@ export default async function handler(req, res) {
         });
 
         return res.status(200).json({ ok: true, sync_id: syncId, updated_at });
-      }
-
-      if (action === "status") {
-        const { url, key } = env();
-        return res.status(200).json({
-          ok: true,
-          configured: !!(url && key),
-          hasServiceRole: !!(process.env.SUPABASE_SERVICE_ROLE_KEY || "")
-        });
       }
 
       return res.status(400).json({ error: "Unknown action" });
