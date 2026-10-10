@@ -24,9 +24,10 @@
       "/weekly-review-ui.js",
       "/weekly-signals.js",
       "/visual-pro.js",
-      "/sip-calendar-ui.js"
+      "/sip-calendar-ui.js",
+      "/sync-ui.js"
     ];
-    var ver = "?v=26";
+    var ver = "?v=27";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;

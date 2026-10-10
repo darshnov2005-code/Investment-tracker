@@ -10,6 +10,7 @@
     "api/week-performance.js": { "maxDuration": 30 },
     "api/mf-week.js": { "maxDuration": 45 },
     "api/technical.js": { "maxDuration": 15 },
-    "api/sip-calendar.js": { "maxDuration": 25 }
+    "api/sip-calendar.js": { "maxDuration": 25 },
+    "api/portfolio-sync.js": { "maxDuration": 15 }
   }
 }
