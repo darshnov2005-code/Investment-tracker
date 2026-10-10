@@ -27,7 +27,7 @@
       "/sip-calendar-ui.js",
       "/sync-ui.js"
     ];
-    var ver = "?v=28";
+    var ver = "?v=29";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
