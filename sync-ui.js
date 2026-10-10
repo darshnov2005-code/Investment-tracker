@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Multi-device sync via Supabase (encrypted).
- * v2 — more reliable Settings injection
+ * v3 — Settings page only
  */
 (function () {
   var CFG_KEY = "investtrack-sync-cfg";
@@ -143,19 +143,19 @@
   }
 
   function isSettingsPage() {
-    var title = document.getElementById("title");
-    if (title && /setting/i.test(title.textContent || "")) return true;
     var active = document.querySelector(
-      '.nav button.active[data-page="settings"], .bottomnav button.active[data-page="settings"], button.active[data-page="settings"]'
+      '.nav button.active[data-page="settings"], .bottomnav button.active[data-page="settings"]'
     );
     if (active) return true;
-    var view = document.getElementById("view");
-    if (view) {
-      var html = view.innerHTML || "";
-      if (/Privacy|Change PIN|Danger zone|Export JSON|Import JSON|Auto backup/i.test(html))
-        return true;
-    }
+    var title = document.getElementById("title");
+    if (title && /^\s*Settings/i.test(title.textContent || "")) return true;
     return false;
+  }
+
+  function removePanelIfWrongPage() {
+    if (isSettingsPage()) return;
+    var p = document.getElementById("syncPanel");
+    if (p && p.parentNode) p.parentNode.removeChild(p);
   }
 
   function injectPanel() {
@@ -327,11 +327,16 @@
   document.addEventListener(
     "click",
     function (e) {
-      var t = e.target && e.target.closest && e.target.closest('[data-page="settings"]');
-      if (t) {
+      var btn = e.target && e.target.closest && e.target.closest("[data-page]");
+      if (!btn) return;
+      var page = btn.getAttribute("data-page");
+      if (page === "settings") {
         [50, 200, 500, 1000, 2000].forEach(function (ms) {
           setTimeout(injectPanel, ms);
         });
+      } else {
+        setTimeout(removePanelIfWrongPage, 30);
+        setTimeout(removePanelIfWrongPage, 200);
       }
     },
     true
@@ -341,15 +346,17 @@
   if (view) {
     new MutationObserver(function () {
       injectPanel();
+      removePanelIfWrongPage();
     }).observe(view, { childList: true, subtree: true });
   }
 
   setInterval(function () {
+    removePanelIfWrongPage();
     if (isSettingsPage() && !document.getElementById("syncPanel")) injectPanel();
   }, 800);
 
   setTimeout(boot, 400);
   setTimeout(boot, 1200);
   setTimeout(boot, 3000);
-  console.log("[sync-ui] ready v2");
+  console.log("[sync-ui] ready v3 settings-only");
 })();
