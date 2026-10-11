@@ -25,9 +25,11 @@
       "/weekly-signals.js",
       "/visual-pro.js",
       "/sip-calendar-ui.js",
-      "/sync-ui.js"
+      "/sync-ui.js",
+      "/holdings-heat.js",
+      "/soft-refresh-hook.js"
     ];
-    var ver = "?v=30";
+    var ver = "?v=31";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
