@@ -27,9 +27,10 @@
       "/sip-calendar-ui.js",
       "/sync-ui.js",
       "/holdings-heat.js",
-      "/soft-refresh-hook.js"
+      "/soft-refresh-hook.js",
+      "/paper-trading-ui.js"
     ];
-    var ver = "?v=31";
+    var ver = "?v=32";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
