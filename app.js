@@ -28,9 +28,9 @@
       "/sync-ui.js",
       "/holdings-heat.js",
       "/soft-refresh-hook.js",
-      "/paper-trading-ui.js"
+      "/consolidate-nav.js"
     ];
-    var ver = "?v=32";
+    var ver = "?v=33";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
