@@ -1,10 +1,11 @@
 "use strict";
 /**
  * Multi-device sync via Supabase (encrypted).
- * v3 — Settings page only
+ * v4 — auto-push, conflict warning, last sync time
  */
 (function () {
   var CFG_KEY = "investtrack-sync-cfg";
+  var PASS_SESSION = "investtrack-sync-pass";
   var STATE_KEYS = ["investtrack-v4", "investtrack-v3"];
   var EXTRA_KEYS = [
     "investtrack-notes-v1",
@@ -142,6 +143,47 @@
     }
   }
 
+  function fmtWhen(iso) {
+    if (!iso) return "";
+    try {
+      var d = new Date(iso);
+      if (!isFinite(d.getTime())) return String(iso);
+      return d.toLocaleString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      });
+    } catch (e) {
+      return String(iso);
+    }
+  }
+
+  function localSavedAt() {
+    try {
+      var raw = localStorage.getItem("investtrack-v4") || localStorage.getItem("investtrack-v3");
+      if (!raw) return 0;
+      var st = JSON.parse(raw);
+      return (st.meta && st.meta.lastSavedAt) || 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function rememberPass(pass) {
+    try {
+      if (pass) sessionStorage.setItem(PASS_SESSION, pass);
+    } catch (e) {}
+  }
+  function getSessionPass() {
+    try {
+      return sessionStorage.getItem(PASS_SESSION) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
   function isSettingsPage() {
     var active = document.querySelector(
       '.nav button.active[data-page="settings"], .bottomnav button.active[data-page="settings"]'
@@ -185,7 +227,20 @@
       '<div><label class="muted" style="display:block;margin-bottom:4px;font-size:12px">Device label (optional)</label>' +
       '<input class="input wide" id="syncDevice" placeholder="e.g. iPhone, Laptop" value="' +
       esc(cfg.deviceLabel || "") +
-      '"></div></div>' +
+      '"></div>' +
+      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">' +
+      '<input type="checkbox" id="syncAutoPush"' +
+      (cfg.autoPush ? " checked" : "") +
+      '> Auto-push after edits <span class="muted">(needs passphrase once this session)</span></label>' +
+      '<div id="syncLast" class="muted" style="font-size:12px;line-height:1.45">' +
+      (cfg.lastPushAt
+        ? "Last push: <b>" +
+          esc(fmtWhen(cfg.lastPushAt)) +
+          "</b>" +
+          (cfg.deviceLabel ? " from " + esc(cfg.deviceLabel) : "")
+        : "No push yet from this device.") +
+      (cfg.lastPullAt ? "<br>Last pull: <b>" + esc(fmtWhen(cfg.lastPullAt)) + "</b>" : "") +
+      "</div></div>" +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">' +
       '<button type="button" class="btn primary" id="syncPush">\u2B06 Push to cloud</button>' +
       '<button type="button" class="btn" id="syncPull">\u2B07 Pull from cloud</button>' +
@@ -208,7 +263,6 @@
           esc(st.error || "");
       }
     });
-    console.log("[sync-ui] panel injected");
   }
 
   function msg(text, ok) {
@@ -239,9 +293,11 @@
         var cfg = loadCfg();
         cfg.syncId = (panel.querySelector("#syncIdInput").value || "").trim();
         cfg.deviceLabel = (panel.querySelector("#syncDevice").value || "").trim();
+        var autoEl = panel.querySelector("#syncAutoPush");
+        cfg.autoPush = !!(autoEl && autoEl.checked);
         if (!cfg.syncId || cfg.syncId.length < 8) return msg("Sync ID too short", false);
         saveCfg(cfg);
-        msg("Sync ID saved on this device.", true);
+        msg("Sync settings saved on this device.", true);
       };
 
     if (push)
@@ -267,12 +323,22 @@
             device_label: device || undefined,
             meta: { app: "investtrack", bytes: enc.ciphertext.length }
           });
+          rememberPass(pass);
           var cfg = loadCfg();
           cfg.syncId = syncId;
           cfg.deviceLabel = device;
           cfg.lastPushAt = updated_at;
+          var autoEl = panel.querySelector("#syncAutoPush");
+          cfg.autoPush = !!(autoEl && autoEl.checked);
           saveCfg(cfg);
-          msg("Pushed OK at " + updated_at, true);
+          msg("Pushed OK at " + fmtWhen(updated_at), true);
+          var last = document.getElementById("syncLast");
+          if (last)
+            last.innerHTML =
+              "Last push: <b>" +
+              esc(fmtWhen(updated_at)) +
+              "</b>" +
+              (device ? " from " + esc(device) : "");
         } catch (e) {
           msg("Push failed: " + e.message, false);
         }
@@ -291,11 +357,42 @@
           ) {
             return;
           }
-          msg("Downloading\u2026", true);
+          msg("Checking cloud\u2026", true);
           var data = await api({ action: "pull", sync_id: syncId });
           var row = data.row;
           if (!row) throw new Error("Empty response");
+          var cloudTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+          var localTs = localSavedAt();
+          var cfg0 = loadCfg();
+          var lastPushTs = cfg0.lastPushAt ? new Date(cfg0.lastPushAt).getTime() : 0;
+          var newestLocal = Math.max(localTs, lastPushTs);
+          if (newestLocal && cloudTs && newestLocal > cloudTs + 5000) {
+            if (
+              !confirm(
+                "Conflict: local data looks NEWER than cloud.\n\nLocal saved: " +
+                  (localTs ? fmtWhen(new Date(localTs).toISOString()) : "unknown") +
+                  "\nCloud: " +
+                  fmtWhen(row.updated_at) +
+                  "\n\nPull will OVERWRITE local. Continue?"
+              )
+            ) {
+              msg("Pull cancelled (local newer).", false);
+              return;
+            }
+          } else if (cloudTs && lastPushTs && cloudTs > lastPushTs + 5000) {
+            if (
+              !confirm(
+                "Cloud is newer (" +
+                  fmtWhen(row.updated_at) +
+                  ").\nThis will replace data on this device. Continue?"
+              )
+            ) {
+              msg("Pull cancelled.", false);
+              return;
+            }
+          }
           msg("Decrypting\u2026", true);
+          rememberPass(pass);
           var bundle = await decryptPayload(pass, row.ciphertext, row.iv, row.salt);
           applyBundle(bundle);
           var cfg = loadCfg();
@@ -316,6 +413,52 @@
         }
       };
   }
+
+  async function tryAutoPush() {
+    var cfg = loadCfg();
+    if (!cfg.autoPush || !cfg.syncId) return { ok: false, reason: "off" };
+    var pass = getSessionPass();
+    if (!pass || pass.length < 4) return { ok: false, reason: "no-pass" };
+    if (!getPortfolioRaw()) return { ok: false, reason: "empty" };
+    try {
+      var bundle = collectBundle();
+      var enc = await encryptPayload(pass, bundle);
+      var updated_at = new Date().toISOString();
+      await api({
+        action: "push",
+        sync_id: cfg.syncId,
+        ciphertext: enc.ciphertext,
+        iv: enc.iv,
+        salt: enc.salt,
+        updated_at: updated_at,
+        device_label: cfg.deviceLabel || undefined,
+        meta: { app: "investtrack", auto: true }
+      });
+      cfg.lastPushAt = updated_at;
+      saveCfg(cfg);
+      console.log("[sync-ui] auto-pushed", updated_at);
+      return { ok: true, at: updated_at };
+    } catch (e) {
+      console.warn("[sync-ui] auto-push failed", e.message);
+      return { ok: false, reason: e.message };
+    }
+  }
+
+  var autoTimer = null;
+  function notifySaved() {
+    var cfg = loadCfg();
+    if (!cfg.autoPush) return;
+    if (autoTimer) clearTimeout(autoTimer);
+    autoTimer = setTimeout(function () {
+      tryAutoPush();
+    }, 1200);
+  }
+
+  window.__investSync = {
+    notifySaved: notifySaved,
+    tryAutoPush: tryAutoPush,
+    loadCfg: loadCfg
+  };
 
   function boot() {
     injectPanel();
@@ -358,5 +501,5 @@
   setTimeout(boot, 400);
   setTimeout(boot, 1200);
   setTimeout(boot, 3000);
-  console.log("[sync-ui] ready v3 settings-only");
+  console.log("[sync-ui] ready v4 auto-push + conflict + last-sync");
 })();
