@@ -1,10 +1,10 @@
 "use strict";
 /**
  * Weekly portfolio review — stocks + MF.
- * v6: correct API (GET symbols) + lot baseline = max(buy, week start)
+ * v7: GET symbols API + lot baseline + page-persist loader
  */
 (function () {
-  var CACHE = "investtrack-weekly-review-v3";
+  var CACHE = "investtrack-weekly-review-v4";
 
   function esc(x) {
     var d = document.createElement("div");
@@ -39,10 +39,13 @@
     var sun = new Date(mon);
     sun.setDate(mon.getDate() + 6);
     function iso(d) {
-      var y = d.getFullYear();
-      var m = ("0" + (d.getMonth() + 1)).slice(-2);
-      var dd = ("0" + d.getDate()).slice(-2);
-      return y + "-" + m + "-" + dd;
+      return (
+        d.getFullYear() +
+        "-" +
+        ("0" + (d.getMonth() + 1)).slice(-2) +
+        "-" +
+        ("0" + d.getDate()).slice(-2)
+      );
     }
     return { from: iso(mon), to: iso(sun), label: iso(mon) + " \u2192 " + iso(sun) };
   }
@@ -64,10 +67,10 @@
       ".wr-wrap{display:grid;gap:16px}" +
       ".wr-section{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:rgba(255,255,255,0.02)}" +
       ".wr-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:rgba(0,0,0,0.22);border-bottom:1px solid var(--line)}" +
-      ".wr-head h3{margin:0;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}" +
+      ".wr-head h3{margin:0;font-size:16px;font-weight:700}" +
       ".wr-head .wr-sub{font-size:12px;color:var(--muted);margin-top:3px}" +
       ".wr-body{padding:14px 16px}" +
-      ".wr-kpi{font-size:26px;font-weight:800;letter-spacing:-0.02em;line-height:1.15}" +
+      ".wr-kpi{font-size:26px;font-weight:800}" +
       ".wr-chip{display:inline-block;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(255,255,255,0.06);border:1px solid var(--line);margin:2px}" +
       ".wr-empty{padding:18px;text-align:center;color:var(--muted);font-size:13px}";
     document.head.appendChild(s);
@@ -75,9 +78,9 @@
 
   function section(emoji, title, subtitle, rightHtml, bodyHtml) {
     return (
-      '<section class="wr-section"><div class="wr-head"><div><h3><span aria-hidden="true">' +
+      '<section class="wr-section"><div class="wr-head"><div><h3>' +
       emoji +
-      "</span> " +
+      " " +
       esc(title) +
       '</h3><div class="wr-sub">' +
       esc(subtitle || "") +
@@ -94,8 +97,6 @@
       .toUpperCase()
       .replace(/\.NS$/i, "")
       .replace(/\.BO$/i, "")
-      .replace(/\.NSE$/i, "")
-      .replace(/\.BSE$/i, "")
       .replace(/\s+/g, "")
       .trim();
   }
@@ -106,9 +107,7 @@
     if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
     var m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     if (m) {
-      var dd = ("0" + m[1]).slice(-2);
-      var mm = ("0" + m[2]).slice(-2);
-      return m[3] + "-" + mm + "-" + dd;
+      return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
     }
     var t = Date.parse(s);
     if (isFinite(t)) {
@@ -134,7 +133,7 @@
       })
       .forEach(function (t) {
         if (!t) return;
-        if (normSym(t.symbol) !== key && normSym(t.symbolRaw || "") !== key) return;
+        if (normSym(t.symbol) !== key) return;
         var q = Number(t.qty) || 0;
         var px = Number(t.price) || 0;
         if (q <= 0) return;
@@ -167,22 +166,17 @@
     var to = normDate(range.to);
     var lots = openLots(st, h.symbol);
     if (!lots.length && h.symbolRaw) lots = openLots(st, h.symbolRaw);
-    if (!lots.length && m.symbol) lots = openLots(st, m.symbol);
 
     if (!lots.length) {
-      var avg = Number(h.avg) || Number(h.avgCost) || null;
       var baseline =
-        marketWeekStart != null && isFinite(marketWeekStart) ? marketWeekStart : avg;
+        marketWeekStart != null && isFinite(marketWeekStart)
+          ? marketWeekStart
+          : Number(h.avg) || null;
       var est0 =
         baseline != null && isFinite(baseline) ? Number(h.qty) * (price - baseline) : null;
       var pct0 =
         baseline != null && baseline > 1e-9 ? ((price - baseline) / baseline) * 100 : null;
-      return {
-        est: est0,
-        pct: pct0,
-        weekStart: baseline,
-        error: m.error || "no lots matched"
-      };
+      return { est: est0, pct: pct0, weekStart: baseline, error: m.error };
     }
 
     var est = 0,
@@ -196,19 +190,14 @@
         baseline = lot.price != null && isFinite(lot.price) ? lot.price : marketWeekStart;
       } else {
         baseline =
-          marketWeekStart != null && isFinite(marketWeekStart)
-            ? marketWeekStart
-            : lot.price;
+          marketWeekStart != null && isFinite(marketWeekStart) ? marketWeekStart : lot.price;
       }
       if (baseline == null || !isFinite(baseline) || baseline <= 0) return;
       est += lot.qty * (price - baseline);
       basis += lot.qty * baseline;
       qtySum += lot.qty;
     });
-
-    if (qtySum < 1e-12) {
-      return { est: null, pct: null, weekStart: marketWeekStart, error: m.error };
-    }
+    if (qtySum < 1e-12) return { est: null, pct: null, weekStart: marketWeekStart, error: m.error };
     return {
       est: est,
       pct: basis > 1e-9 ? (est / basis) * 100 : null,
@@ -226,7 +215,6 @@
         var m =
           moves[h.symbol] ||
           moves[symU] ||
-          moves[String(h.symbolRaw || "").toUpperCase()] ||
           moves[normSym(h.symbolRaw)] ||
           moves[h.symbolRaw] ||
           {};
@@ -266,9 +254,9 @@
           return (
             '<span class="wr-chip">' +
             esc(r.name || r.symbol) +
-            " <b class=\"" +
+            ' <b class="' +
             pctCls(r.pct) +
-            '\">' +
+            '">' +
             pctLab(r.pct) +
             "</b></span>"
           );
@@ -276,9 +264,9 @@
         .join(" ");
     }
     return (
-      '<div style="font-size:13px"><div style="margin-bottom:8px"><span class="muted">\uD83D\uDE80 Leaders</span><div style="margin-top:6px">' +
+      '<div style="font-size:13px"><div style="margin-bottom:8px"><span class="muted">Leaders</span><div style="margin-top:6px">' +
       line(top) +
-      '</div></div><div><span class="muted">\uD83D\uDCC9 Laggards</span><div style="margin-top:6px">' +
+      '</div></div><div><span class="muted">Laggards</span><div style="margin-top:6px">' +
       line(bot) +
       "</div></div></div>"
     );
@@ -386,9 +374,7 @@
         "Mutual funds",
         "SIPs this week use installment NAV as baseline",
         '<span class="' + pctCls(mfEst) + '" style="font-weight:800">' + money(mfEst) + "</span>",
-        mfRows.length
-          ? mfBody
-          : '<div class="wr-empty">No mutual fund holdings found.</div>'
+        mfRows.length ? mfBody : '<div class="wr-empty">No mutual fund holdings found.</div>'
       )
     );
   }
@@ -479,26 +465,45 @@
     try {
       var st = getState() || { transactions: [] };
       var holds = buildHoldings(st);
-      var stocks = holds.filter(function (h) {
-        var t = String(h.type || "").toUpperCase();
-        return t === "STOCK" || t === "ETF" || t === "" || t === "OTHER";
-      });
       var mfs = holds.filter(function (h) {
         return String(h.type || "").toUpperCase() === "MUTUAL_FUND";
+      });
+      var stocks = holds.filter(function (h) {
+        return String(h.type || "").toUpperCase() !== "MUTUAL_FUND";
       });
 
       var stockMoves = {};
       var mfMoves = {};
 
+      if (!holds.length) {
+        view.innerHTML = pageShell(
+          '<div class="wr-empty">No holdings found. Add stock/MF transactions first.</div>'
+        );
+        return;
+      }
+
       if (stocks.length) {
-        var syms = stocks.map(function (h) { return normSym(h.symbol); }).filter(Boolean);
-        syms = syms.filter(function (s, i) { return syms.indexOf(s) === i; }).slice(0, 25);
+        var syms = stocks
+          .map(function (h) {
+            return normSym(h.symbol);
+          })
+          .filter(Boolean);
+        syms = syms
+          .filter(function (s, i) {
+            return syms.indexOf(s) === i;
+          })
+          .slice(0, 25);
         if (syms.length) {
           var r = await fetch(
-            "/api/week-performance?symbols=" + encodeURIComponent(syms.join(",")) + "&t=" + Date.now()
+            "/api/week-performance?symbols=" +
+              encodeURIComponent(syms.join(",")) +
+              "&t=" +
+              Date.now()
           );
           if (!r.ok) {
-            var errBody = await r.json().catch(function () { return {}; });
+            var errBody = await r.json().catch(function () {
+              return {};
+            });
             throw new Error(errBody.error || "HTTP " + r.status);
           }
           stockMoves = itemsToMoves((await r.json()).items || []);
@@ -506,10 +511,16 @@
       }
 
       if (mfs.length) {
-        var codes = mfs.map(function (h) {
-          return String(h.symbolRaw || h.symbol || "").trim();
-        }).filter(Boolean);
-        codes = codes.filter(function (s, i) { return codes.indexOf(s) === i; }).slice(0, 20);
+        var codes = mfs
+          .map(function (h) {
+            return String(h.symbolRaw || h.symbol || "").trim();
+          })
+          .filter(Boolean);
+        codes = codes
+          .filter(function (s, i) {
+            return codes.indexOf(s) === i;
+          })
+          .slice(0, 20);
         if (codes.length) {
           var r2 = await fetch(
             "/api/mf-week?symbols=" + encodeURIComponent(codes.join(",")) + "&t=" + Date.now()
@@ -526,7 +537,9 @@
         stockMoves: stockMoves,
         mfMoves: mfMoves
       };
-      try { localStorage.setItem(CACHE, JSON.stringify(data)); } catch (e) {}
+      try {
+        localStorage.setItem(CACHE, JSON.stringify(data));
+      } catch (e) {}
       view.innerHTML = pageShell(render(data));
       wire(data);
     } catch (e) {
@@ -536,21 +549,32 @@
 
   function wire(data) {
     var b = document.getElementById("wr-refresh");
-    if (b) b.onclick = function () { load(true); };
+    if (b)
+      b.onclick = function () {
+        load(true);
+      };
     var s = document.getElementById("wr-save-notes");
     if (s)
       s.onclick = function () {
         try {
           var notes = JSON.parse(localStorage.getItem("investtrack-notes-v1") || "[]");
           var range = (data && data.range) || weekRange();
-          var stockRows = moveRows((data && data.stocks) || [], (data && data.stockMoves) || {}, getState(), range);
+          var stockRows = moveRows(
+            (data && data.stocks) || [],
+            (data && data.stockMoves) || {},
+            getState(),
+            range
+          );
           var text =
             "Weekly review " +
             (range.label || "") +
             "\n" +
-            stockRows.slice(0, 8).map(function (r) {
-              return (r.name || r.symbol) + ": " + pctLab(r.pct) + " / " + money(r.est);
-            }).join("\n");
+            stockRows
+              .slice(0, 8)
+              .map(function (r) {
+                return (r.name || r.symbol) + ": " + pctLab(r.pct) + " / " + money(r.est);
+              })
+              .join("\n");
           notes.unshift({
             id: "n-" + Date.now(),
             title: "Weekly review",
@@ -566,17 +590,6 @@
       };
   }
 
-  function injectNav() {
-    var nav = document.querySelector(".nav");
-    if (!nav || nav.querySelector('[data-page="weekly"]')) return;
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.setAttribute("data-page", "weekly");
-    btn.textContent = "Weekly";
-    btn.style.display = "none";
-    nav.appendChild(btn);
-  }
-
   document.addEventListener(
     "click",
     function (e) {
@@ -587,17 +600,13 @@
         load(false);
       }
       var tab = e.target && e.target.closest && e.target.closest('[data-nav-tab="weekly"]');
-      if (tab) setTimeout(function () { load(false); }, 50);
+      if (tab) setTimeout(function () {
+        load(false);
+      }, 80);
     },
     true
   );
 
-  function boot() {
-    injectNav();
-  }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
-  setTimeout(boot, 500);
-  setTimeout(boot, 1500);
-  console.log("[weekly-review-ui] ready v6 GET symbols + baseline fix");
+  window.__weeklyReviewLoad = load;
+  console.log("[weekly-review-ui] ready v7 page-persist + robust load");
 })();
