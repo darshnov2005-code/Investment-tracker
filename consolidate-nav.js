@@ -1,7 +1,4 @@
 "use strict";
-/**
- * Simplified nav: Dashboard | Portfolio | SIPs | Markets | Settings
- */
 (function () {
   var GROUP_KEY = "investtrack-nav-group";
   var TAB_KEY = "investtrack-nav-tab";
@@ -21,6 +18,7 @@
       label: "Markets",
       tabs: [
         { id: "movers", label: "Sector heatmap", page: "movers" },
+        { id: "opportunities", label: "Opportunities", page: "opportunities" },
         { id: "sipcal", label: "SIP day / FII", page: "sipcal" },
         { id: "weekly", label: "Weekly review", page: "weekly" }
       ]
@@ -39,7 +37,7 @@
 
   var HIDE_PAGES = [
     "research", "paper", "ideas", "realized", "transactions", "holdings", "goals",
-    "import", "movers", "sectors", "weekly", "sipcal", "notes", "watchlist", "review"
+    "import", "movers", "sectors", "weekly", "opportunities", "sipcal", "notes", "watchlist", "review"
   ];
 
   function getGroup() {
@@ -66,6 +64,10 @@
     if (!page) return;
     if (page === "weekly" && window.__weeklyReviewLoad) {
       window.__weeklyReviewLoad(false);
+      return;
+    }
+    if (page === "opportunities" && window.__opportunitiesLoad) {
+      window.__opportunitiesLoad(false);
       return;
     }
     var btn =
@@ -230,5 +232,5 @@
   setTimeout(boot, 2500);
   setInterval(hideClutter, 2500);
   window.__consolidateActivate = activateGroup;
-  console.log("[consolidate-nav] ready v2 page-persist");
+  console.log("[consolidate-nav] ready v3 opportunities");
 })();

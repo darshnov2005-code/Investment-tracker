@@ -1,7 +1,4 @@
 "use strict";
-/**
- * Stay on the current screen after Refresh quotes / soft re-render.
- */
 (function () {
   var PAGE_KEY = "investtrack-ui-page";
   var GROUP_KEY = "investtrack-nav-group";
@@ -14,9 +11,7 @@
       if (group) localStorage.setItem(GROUP_KEY, group);
       if (tab && group) {
         var all = {};
-        try {
-          all = JSON.parse(localStorage.getItem(TAB_KEY) || "{}");
-        } catch (e) {}
+        try { all = JSON.parse(localStorage.getItem(TAB_KEY) || "{}"); } catch (e) {}
         all[group] = tab;
         localStorage.setItem(TAB_KEY, JSON.stringify(all));
       }
@@ -28,9 +23,7 @@
       var page = sessionStorage.getItem(PAGE_KEY) || "dashboard";
       var group = localStorage.getItem(GROUP_KEY) || "dashboard";
       var tabs = {};
-      try {
-        tabs = JSON.parse(localStorage.getItem(TAB_KEY) || "{}");
-      } catch (e) {}
+      try { tabs = JSON.parse(localStorage.getItem(TAB_KEY) || "{}"); } catch (e) {}
       return { page: page, group: group, tab: tabs[group] || null };
     } catch (e) {
       return { page: "dashboard", group: "dashboard", tab: null };
@@ -43,40 +36,22 @@
       window.__weeklyReviewLoad(false);
       return true;
     }
+    if (page === "opportunities" && window.__opportunitiesLoad) {
+      window.__opportunitiesLoad(false);
+      return true;
+    }
     if (page === "movers" || page === "sectors") {
-      var mb =
-        document.querySelector('[data-page="movers"]') ||
-        document.querySelector('[data-page="sectors"]');
-      if (mb) {
-        mb.click();
-        return true;
-      }
+      var mb = document.querySelector('[data-page="movers"]') || document.querySelector('[data-page="sectors"]');
+      if (mb) { mb.click(); return true; }
     }
     if (page === "sipcal" && window.__sipCalendarLoad) {
       window.__sipCalendarLoad();
       return true;
     }
-    if (page === "notes") {
-      var n = document.querySelector('[data-page="notes"]');
-      if (n) {
-        n.click();
-        return true;
-      }
-    }
-    if (page === "watchlist") {
-      var w = document.querySelector('[data-page="watchlist"]');
-      if (w) {
-        w.click();
-        return true;
-      }
-    }
     var btn =
       document.querySelector('.nav button[data-page="' + page + '"]') ||
       document.querySelector('button[data-page="' + page + '"]');
-    if (btn) {
-      btn.click();
-      return true;
-    }
+    if (btn) { btn.click(); return true; }
     return false;
   }
 
@@ -90,31 +65,22 @@
         page = s.tab || "holdings";
         if (s.tab === "transactions") page = "transactions";
         if (s.tab === "realized") page = "realized";
-        if (s.tab === "holdings") page = "holdings";
       }
       if (s.group === "markets") {
         page = s.tab || "movers";
         if (s.tab === "weekly") page = "weekly";
+        if (s.tab === "opportunities") page = "opportunities";
         if (s.tab === "sipcal") page = "sipcal";
         if (s.tab === "movers") page = "movers";
       }
-      if (s.group === "settings") {
-        page = s.tab || "settings";
-      }
-      if (page === "dashboard") {
-        restoring = false;
-        return;
-      }
+      if (s.group === "settings") page = s.tab || "settings";
+      if (page === "dashboard") { restoring = false; return; }
       clickPage(page);
       if (window.__consolidateActivate && s.group) {
-        try {
-          window.__consolidateActivate(s.group, s.tab);
-        } catch (e) {}
+        try { window.__consolidateActivate(s.group, s.tab); } catch (e) {}
       }
     } finally {
-      setTimeout(function () {
-        restoring = false;
-      }, 400);
+      setTimeout(function () { restoring = false; }, 400);
     }
   }
 
@@ -126,17 +92,9 @@
         var g = tab.getAttribute("data-nav-tab-group");
         var t = tab.getAttribute("data-nav-tab");
         var pageMap = {
-          holdings: "holdings",
-          transactions: "transactions",
-          realized: "realized",
-          movers: "movers",
-          sipcal: "sipcal",
-          weekly: "weekly",
-          settings: "settings",
-          notes: "notes",
-          watchlist: "watchlist",
-          goals: "goals",
-          import: "import"
+          holdings: "holdings", transactions: "transactions", realized: "realized",
+          movers: "movers", sipcal: "sipcal", weekly: "weekly", opportunities: "opportunities",
+          settings: "settings", notes: "notes", watchlist: "watchlist", goals: "goals", import: "import"
         };
         savePage(pageMap[t] || t, g, t);
         return;
@@ -163,13 +121,8 @@
   document.addEventListener(
     "click",
     function (e) {
-      if (
-        !(e.target && (e.target.id === "refresh" || (e.target.closest && e.target.closest("#refresh"))))
-      )
-        return;
-      [200, 600, 1200, 2500, 4000].forEach(function (ms) {
-        setTimeout(restore, ms);
-      });
+      if (!(e.target && (e.target.id === "refresh" || (e.target.closest && e.target.closest("#refresh"))))) return;
+      [200, 600, 1200, 2500, 4000].forEach(function (ms) { setTimeout(restore, ms); });
     },
     true
   );
@@ -182,9 +135,7 @@
     lastTitle = t;
     var s = getSaved();
     if (!s.page || s.page === "dashboard") return;
-    if (/dashboard|portfolio overview/i.test(t) && s.page !== "dashboard") {
-      setTimeout(restore, 50);
-    }
+    if (/dashboard|portfolio overview/i.test(t) && s.page !== "dashboard") setTimeout(restore, 50);
   }, 500);
 
   window.__pagePersistRestore = restore;
