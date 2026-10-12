@@ -28,9 +28,10 @@
       "/sync-ui.js",
       "/holdings-heat.js",
       "/soft-refresh-hook.js",
-      "/consolidate-nav.js"
+      "/consolidate-nav.js",
+      "/holdings-day-pnl.js"
     ];
-    var ver = "?v=33";
+    var ver = "?v=34";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
