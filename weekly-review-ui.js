@@ -1,10 +1,10 @@
 "use strict";
 /**
  * Weekly portfolio review — stocks + MF.
- * Week P/L lot-aware: baseline = buy price or week-start price, whichever applies later.
+ * v6: correct API (GET symbols) + lot baseline = max(buy, week start)
  */
 (function () {
-  var CACHE = "investtrack-weekly-review-v2";
+  var CACHE = "investtrack-weekly-review-v3";
 
   function esc(x) {
     var d = document.createElement("div");
@@ -39,7 +39,10 @@
     var sun = new Date(mon);
     sun.setDate(mon.getDate() + 6);
     function iso(d) {
-      return d.toISOString().slice(0, 10);
+      var y = d.getFullYear();
+      var m = ("0" + (d.getMonth() + 1)).slice(-2);
+      var dd = ("0" + d.getDate()).slice(-2);
+      return y + "-" + m + "-" + dd;
     }
     return { from: iso(mon), to: iso(sun), label: iso(mon) + " \u2192 " + iso(sun) };
   }
@@ -110,10 +113,13 @@
     var t = Date.parse(s);
     if (isFinite(t)) {
       var dt = new Date(t);
-      var y = dt.getFullYear();
-      var mo = ("0" + (dt.getMonth() + 1)).slice(-2);
-      var day = ("0" + dt.getDate()).slice(-2);
-      return y + "-" + mo + "-" + day;
+      return (
+        dt.getFullYear() +
+        "-" +
+        ("0" + (dt.getMonth() + 1)).slice(-2) +
+        "-" +
+        ("0" + dt.getDate()).slice(-2)
+      );
     }
     return s.slice(0, 10);
   }
@@ -175,7 +181,7 @@
         est: est0,
         pct: pct0,
         weekStart: baseline,
-        error: m.error || "no lots matched — used week open"
+        error: m.error || "no lots matched"
       };
     }
 
@@ -185,7 +191,6 @@
     lots.forEach(function (lot) {
       var d = lot.date || "";
       if (d && to && d > to) return;
-
       var baseline;
       if (d && from && d >= from) {
         baseline = lot.price != null && isFinite(lot.price) ? lot.price : marketWeekStart;
@@ -204,9 +209,12 @@
     if (qtySum < 1e-12) {
       return { est: null, pct: null, weekStart: marketWeekStart, error: m.error };
     }
-    var pct = basis > 1e-9 ? (est / basis) * 100 : null;
-    var avgBaseline = basis / qtySum;
-    return { est: est, pct: pct, weekStart: avgBaseline, error: m.error };
+    return {
+      est: est,
+      pct: basis > 1e-9 ? (est / basis) * 100 : null,
+      weekStart: basis / qtySum,
+      error: m.error
+    };
   }
 
   function moveRows(holds, moves, st, range) {
@@ -330,12 +338,7 @@
 
   function render(data) {
     var range = data.range || weekRange();
-    var stockRows = moveRows(
-      data.stocks || [],
-      data.stockMoves || {},
-      getState(),
-      range
-    );
+    var stockRows = moveRows(data.stocks || [], data.stockMoves || {}, getState(), range);
     var mfRows = moveRows(data.mfs || [], data.mfMoves || {}, getState(), range);
     var stockEst = sumEst(stockRows);
     var mfEst = sumEst(mfRows);
@@ -375,27 +378,88 @@
         "\uD83D\uDCC8",
         "Stocks & ETFs",
         "Mid-week buys use buy price, not Monday",
-        '<span class="' +
-          pctCls(stockEst) +
-          '" style="font-weight:800">' +
-          money(stockEst) +
-          "</span>",
+        '<span class="' + pctCls(stockEst) + '" style="font-weight:800">' + money(stockEst) + "</span>",
         stockBody
       ) +
       section(
         "\uD83D\uDCB0",
         "Mutual funds",
         "SIPs this week use installment NAV as baseline",
-        '<span class="' +
-          pctCls(mfEst) +
-          '" style="font-weight:800">' +
-          money(mfEst) +
-          "</span>",
+        '<span class="' + pctCls(mfEst) + '" style="font-weight:800">' + money(mfEst) + "</span>",
         mfRows.length
           ? mfBody
-          : '<div class="wr-empty">No mutual fund holdings found. Log SIP/MF buys to see this section fill up.</div>'
+          : '<div class="wr-empty">No mutual fund holdings found.</div>'
       )
     );
+  }
+
+  function buildHoldings(st) {
+    var lots = {};
+    (st.transactions || [])
+      .slice()
+      .sort(function (a, b) {
+        return normDate(a.date).localeCompare(normDate(b.date));
+      })
+      .forEach(function (t) {
+        if (!t) return;
+        var key = String(t.type || "STOCK") + "|" + normSym(t.symbol);
+        if (!lots[key]) {
+          lots[key] = {
+            qty: 0,
+            cost: 0,
+            name: t.name || t.symbol,
+            symbol: normSym(t.symbol),
+            symbolRaw: t.symbol,
+            type: t.type || "STOCK",
+            exchange: t.exchange || ""
+          };
+        }
+        var q = Number(t.qty) || 0;
+        var px = Number(t.price) || 0;
+        var action = String(t.action || "").toUpperCase();
+        if (["BUY", "SIP", "BONUS", "RIGHTS"].indexOf(action) >= 0 && q > 0) {
+          lots[key].qty += q;
+          lots[key].cost += q * px;
+          if (t.name) lots[key].name = t.name;
+        } else if (["SELL", "REDEMPTION"].indexOf(action) >= 0 && q > 0) {
+          var avg = lots[key].qty > 0 ? lots[key].cost / lots[key].qty : 0;
+          lots[key].qty -= q;
+          lots[key].cost -= avg * q;
+          if (lots[key].qty < 1e-12) {
+            lots[key].qty = 0;
+            lots[key].cost = 0;
+          }
+        }
+      });
+    return Object.keys(lots)
+      .map(function (k) {
+        return lots[k];
+      })
+      .filter(function (h) {
+        return h.qty > 1e-12;
+      })
+      .map(function (h) {
+        h.avg = h.qty > 0 ? h.cost / h.qty : 0;
+        return h;
+      });
+  }
+
+  function itemsToMoves(items) {
+    var map = {};
+    (items || []).forEach(function (it) {
+      if (!it) return;
+      [it.symbol, normSym(it.symbol), it.matchedCode].filter(Boolean).forEach(function (k) {
+        map[k] = {
+          symbol: it.symbol,
+          name: it.name,
+          price: it.price,
+          weekStartPrice: it.weekStartPrice,
+          changePct: it.changePct,
+          error: it.error
+        };
+      });
+    });
+    return map;
   }
 
   async function load(force) {
@@ -404,11 +468,7 @@
     if (!force) {
       try {
         var cached = JSON.parse(localStorage.getItem(CACHE) || "null");
-        if (
-          cached &&
-          cached.asOf &&
-          Date.now() - new Date(cached.asOf).getTime() < 3 * 3600 * 1000
-        ) {
+        if (cached && cached.asOf && Date.now() - new Date(cached.asOf).getTime() < 3 * 3600 * 1000) {
           view.innerHTML = pageShell(render(cached));
           wire(cached);
           return;
@@ -418,62 +478,79 @@
     view.innerHTML = pageShell('<div class="wr-empty">Loading week moves\u2026</div>');
     try {
       var st = getState() || { transactions: [] };
-      var r = await fetch("/api/week-performance?t=" + Date.now(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ portfolio: st })
+      var holds = buildHoldings(st);
+      var stocks = holds.filter(function (h) {
+        var t = String(h.type || "").toUpperCase();
+        return t === "STOCK" || t === "ETF" || t === "" || t === "OTHER";
       });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      var data = await r.json();
-      if (data.error) throw new Error(data.error);
-      data.asOf = new Date().toISOString();
-      try {
-        localStorage.setItem(CACHE, JSON.stringify(data));
-      } catch (e) {}
+      var mfs = holds.filter(function (h) {
+        return String(h.type || "").toUpperCase() === "MUTUAL_FUND";
+      });
+
+      var stockMoves = {};
+      var mfMoves = {};
+
+      if (stocks.length) {
+        var syms = stocks.map(function (h) { return normSym(h.symbol); }).filter(Boolean);
+        syms = syms.filter(function (s, i) { return syms.indexOf(s) === i; }).slice(0, 25);
+        if (syms.length) {
+          var r = await fetch(
+            "/api/week-performance?symbols=" + encodeURIComponent(syms.join(",")) + "&t=" + Date.now()
+          );
+          if (!r.ok) {
+            var errBody = await r.json().catch(function () { return {}; });
+            throw new Error(errBody.error || "HTTP " + r.status);
+          }
+          stockMoves = itemsToMoves((await r.json()).items || []);
+        }
+      }
+
+      if (mfs.length) {
+        var codes = mfs.map(function (h) {
+          return String(h.symbolRaw || h.symbol || "").trim();
+        }).filter(Boolean);
+        codes = codes.filter(function (s, i) { return codes.indexOf(s) === i; }).slice(0, 20);
+        if (codes.length) {
+          var r2 = await fetch(
+            "/api/mf-week?symbols=" + encodeURIComponent(codes.join(",")) + "&t=" + Date.now()
+          );
+          if (r2.ok) mfMoves = itemsToMoves((await r2.json()).items || []);
+        }
+      }
+
+      var data = {
+        asOf: new Date().toISOString(),
+        range: weekRange(),
+        stocks: stocks,
+        mfs: mfs,
+        stockMoves: stockMoves,
+        mfMoves: mfMoves
+      };
+      try { localStorage.setItem(CACHE, JSON.stringify(data)); } catch (e) {}
       view.innerHTML = pageShell(render(data));
       wire(data);
     } catch (e) {
-      view.innerHTML =
-        pageShell(
-          '<div class="wr-empty">Failed: ' + esc(e.message) + "</div>"
-        );
+      view.innerHTML = pageShell('<div class="wr-empty">Failed: ' + esc(e.message) + "</div>");
     }
   }
 
   function wire(data) {
     var b = document.getElementById("wr-refresh");
-    if (b)
-      b.onclick = function () {
-        load(true);
-      };
+    if (b) b.onclick = function () { load(true); };
     var s = document.getElementById("wr-save-notes");
     if (s)
       s.onclick = function () {
         try {
           var notes = JSON.parse(localStorage.getItem("investtrack-notes-v1") || "[]");
           var range = (data && data.range) || weekRange();
-          var stockRows = moveRows(
-            (data && data.stocks) || [],
-            (data && data.stockMoves) || {},
-            getState(),
-            range
-          );
+          var stockRows = moveRows((data && data.stocks) || [], (data && data.stockMoves) || {}, getState(), range);
           var text =
             "Weekly review " +
             (range.label || "") +
             "\n" +
-            stockRows
-              .slice(0, 8)
-              .map(function (r) {
-                return (
-                  (r.name || r.symbol) +
-                  ": " +
-                  pctLab(r.pct) +
-                  " / " +
-                  money(r.est)
-                );
-              })
-              .join("\n");
+            stockRows.slice(0, 8).map(function (r) {
+              return (r.name || r.symbol) + ": " + pctLab(r.pct) + " / " + money(r.est);
+            }).join("\n");
           notes.unshift({
             id: "n-" + Date.now(),
             title: "Weekly review",
@@ -495,7 +572,7 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.setAttribute("data-page", "weekly");
-    btn.textContent = "\uD83D\uDCC5 Weekly";
+    btn.textContent = "Weekly";
     btn.style.display = "none";
     nav.appendChild(btn);
   }
@@ -503,35 +580,14 @@
   document.addEventListener(
     "click",
     function (e) {
-      var btn =
-        e.target &&
-        e.target.closest &&
-        e.target.closest('[data-page="weekly"], [data-nav-tab="weekly"]');
-      if (!btn) return;
-      if (btn.getAttribute("data-nav-tab") === "weekly" || btn.getAttribute("data-page") === "weekly") {
-        // consolidate-nav already routes; still handle direct
-      }
-      if (btn.getAttribute("data-page") === "weekly") {
+      var btn = e.target && e.target.closest && e.target.closest('[data-page="weekly"]');
+      if (btn) {
         e.preventDefault();
         e.stopPropagation();
-        document.querySelectorAll(".nav button").forEach(function (b) {
-          b.classList.toggle("active", b.getAttribute("data-page") === "weekly");
-        });
         load(false);
       }
-    },
-    true
-  );
-
-  // Also open when Markets tab Weekly is chosen via consolidate
-  document.addEventListener(
-    "click",
-    function (e) {
-      var t = e.target && e.target.closest && e.target.closest('[data-nav-tab="weekly"]');
-      if (!t) return;
-      setTimeout(function () {
-        load(false);
-      }, 50);
+      var tab = e.target && e.target.closest && e.target.closest('[data-nav-tab="weekly"]');
+      if (tab) setTimeout(function () { load(false); }, 50);
     },
     true
   );
@@ -543,5 +599,5 @@
   else boot();
   setTimeout(boot, 500);
   setTimeout(boot, 1500);
-  console.log("[weekly-review-ui] ready v5 baseline=max(buy, weekStart)");
+  console.log("[weekly-review-ui] ready v6 GET symbols + baseline fix");
 })();
