@@ -30,9 +30,10 @@
       "/soft-refresh-hook.js",
       "/consolidate-nav.js",
       "/holdings-day-pnl.js",
-      "/page-persist.js"
+      "/page-persist.js",
+      "/opportunities-ui.js"
     ];
-    var ver = "?v=37";
+    var ver = "?v=38";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
