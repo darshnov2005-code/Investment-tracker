@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Holdings table: add Day P/L column (vs previous close) after quote refresh.
+ * Holdings table: Day P/L column after quote refresh.
  */
 (function () {
   function money(n) {
@@ -91,11 +91,7 @@
         hasAny = true;
         cell.className = dayPnl >= 0 ? "green" : "red";
         cell.innerHTML =
-          "<b>" +
-          money(dayPnl) +
-          '</b><div class="sub">' +
-          pct(dayPct) +
-          " vs prev close</div>";
+          "<b>" + money(dayPnl) + "</b> <span class=\"sub\">(" + pct(dayPct) + ")</span>";
       } else {
         cell.className = "muted";
         cell.innerHTML = "\u2014<div class=\"sub\">Refresh quotes</div>";
@@ -116,7 +112,7 @@
       if (hasAny) {
         bar.innerHTML =
           '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
-          '<div><div class="label">Portfolio day P/L</div><div class="muted" style="margin-top:2px">Vs previous close \u00b7 updates when you Refresh quotes</div></div>' +
+          '<div><div class="label">Portfolio day P/L</div><div class="muted" style="margin-top:2px">Updates after Refresh quotes</div></div>' +
           '<div class="big ' +
           (totalDay >= 0 ? "green" : "red") +
           '" style="margin:0">' +
@@ -124,7 +120,7 @@
           "</div></div>";
       } else {
         bar.innerHTML =
-          '<div class="muted">Day P/L needs a quote refresh (prev close). Click <b>Refresh quotes</b> at the top.</div>';
+          '<div class="muted">Day P/L needs a quote refresh. Click <b>Refresh quotes</b> at the top.</div>';
       }
     }
   }
@@ -164,5 +160,5 @@
     if (isHoldingsView()) inject();
   }, 2000);
 
-  console.log("[holdings-day-pnl] ready");
+  console.log("[holdings-day-pnl] ready v2");
 })();
