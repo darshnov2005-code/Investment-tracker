@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Soft refresh after saves (no full page reload) + notify Supabase auto-push.
+ * Soft refresh after saves + notify Supabase auto-push.
  */
 (function () {
   function softRefresh() {
@@ -11,6 +11,13 @@
     try {
       if (window.__investSync && typeof window.__investSync.notifySaved === "function") {
         window.__investSync.notifySaved();
+      }
+    } catch (e) {}
+    try {
+      if (window.__pagePersistRestore) {
+        window.__pagePersistRestore();
+        if (window.investToast) window.investToast("Saved");
+        return true;
       }
     } catch (e) {}
     var active = document.querySelector(".nav button.active[data-page]");
@@ -47,5 +54,5 @@
   };
 
   window.__softRefresh = softRefresh;
-  console.log("[soft-refresh-hook] ready");
+  console.log("[soft-refresh-hook] ready v2");
 })();
