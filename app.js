@@ -31,7 +31,7 @@
       "/consolidate-nav.js",
       "/holdings-day-pnl.js"
     ];
-    var ver = "?v=34";
+    var ver = "?v=35";
     patches.forEach(function (src) {
       var s = document.createElement("script");
       s.src = src + ver;
